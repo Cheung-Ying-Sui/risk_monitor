@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.idea/
+制裁筛查模块/data/sdn_advanced.xml
+制裁筛查模块/data/sdn_advanced.xml.tmp
+static/iho_seas.geojson
