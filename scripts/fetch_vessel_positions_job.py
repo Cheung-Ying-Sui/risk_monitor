@@ -4,18 +4,13 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CHINAPORTS_MODULE_DIR = PROJECT_ROOT / "获取船舶地理位置【已开发完成】"
 
 sys.path.insert(
     0,
     str(PROJECT_ROOT),
 )
-sys.path.insert(
-    0,
-    str(CHINAPORTS_MODULE_DIR),
-)
 
-from fetch_ship_location import fetch_ship_info
+from chinaports_client import fetch_ship_info
 from position_repository import upsert_position
 from supabase_client import supabase
 from vessel_repository import upsert_vessel

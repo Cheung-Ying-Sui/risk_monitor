@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from supabase_client import supabase
 
@@ -19,30 +19,48 @@ def clean_val(value):
 def parse_timestamp(timestamp_value):
     timestamp_value = clean_val(timestamp_value)
     if not timestamp_value:
-        return datetime.now().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     try:
-        clean_timestamp = re.sub(
-            r"\(.*?\)",
-            "",
-            str(timestamp_value),
-        ).strip()
+        timestamp_text = str(timestamp_value)
+        timezone_match = re.search(
+            r"\(UTC([+-]\d{1,2})\)",
+            timestamp_text,
+            re.IGNORECASE,
+        )
+        clean_timestamp = re.sub(r"\(.*?\)", "", timestamp_text).strip()
 
         for timestamp_format in (
             "%Y-%m-%d %H:%M:%S",
             "%Y-%m-%d %H:%M",
         ):
             try:
-                return datetime.strptime(
+                parsed_timestamp = datetime.strptime(
                     clean_timestamp,
                     timestamp_format,
+                )
+
+                if timezone_match:
+                    offset_hours = int(timezone_match.group(1))
+                    source_timezone = timezone(
+                        timedelta(hours=offset_hours)
+                    )
+                    return (
+                        parsed_timestamp
+                        .replace(tzinfo=source_timezone)
+                        .astimezone(timezone.utc)
+                        .isoformat()
+                    )
+
+                return parsed_timestamp.replace(
+                    tzinfo=timezone.utc
                 ).isoformat()
             except ValueError:
                 continue
     except Exception:
         pass
 
-    return datetime.now().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def parse_coordinate(coordinate_value):
