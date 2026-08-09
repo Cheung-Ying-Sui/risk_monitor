@@ -11,6 +11,12 @@ sys.path.insert(
 )
 
 from chinaports_client import fetch_ship_info
+from collection_repository import (
+    create_collection_run,
+    finish_collection_run,
+    record_collection_item_failure,
+    record_collection_item_success,
+)
 from position_repository import upsert_position
 from supabase_client import supabase
 from vessel_repository import upsert_vessel
@@ -92,6 +98,24 @@ def get_active_tracking_records():
     ]
 
 
+def update_collection_run_total(run_id, total_vessels):
+    (
+        supabase
+        .schema("ingest")
+        .table("collection_runs")
+        .update(
+            {
+                "total_vessels": total_vessels,
+            }
+        )
+        .eq(
+            "id",
+            run_id,
+        )
+        .execute()
+    )
+
+
 def process_vessel(record):
     mmsi = str(
         record["mmsi"]
@@ -127,7 +151,13 @@ def process_vessel(record):
 
 
 def main():
+    run_id = create_collection_run()
     records = get_active_tracking_records()
+    update_collection_run_total(
+        run_id,
+        len(records),
+    )
+
     print(
         f"Active vessel tracking records: {len(records)}"
     )
@@ -146,14 +176,37 @@ def main():
                 record
             )
             success_count += 1
+            record_collection_item_success(
+                run_id,
+                mmsi,
+            )
             print(
                 f"Success mmsi={mmsi}: {result}"
             )
         except Exception as exc:
             failed_count += 1
+            record_collection_item_failure(
+                run_id,
+                mmsi,
+                str(exc),
+            )
             print(
                 f"Failed mmsi={mmsi}: {exc}"
             )
+
+    if failed_count == 0:
+        status = "success"
+    elif success_count == 0:
+        status = "failed"
+    else:
+        status = "partial_failed"
+
+    finish_collection_run(
+        run_id,
+        status,
+        success_count,
+        failed_count,
+    )
 
     print(
         "Vessel position collection completed. "
