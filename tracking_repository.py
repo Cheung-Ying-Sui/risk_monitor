@@ -89,13 +89,48 @@ def add_tracking_vessel(
     mmsi,
     tracking_mode="history_tracking",
     priority=0,
+    vessel_id=None,
 ):
+    normalized_mmsi = _normalize_mmsi(mmsi)
     payload = {
-        "mmsi": _normalize_mmsi(mmsi),
+        "mmsi": normalized_mmsi,
         "tracking_mode": _normalize_tracking_mode(tracking_mode),
         "priority": _normalize_priority(priority),
         "is_active": True,
     }
+    if vessel_id:
+        payload["vessel_id"] = vessel_id
+
+    existing_result = (
+        supabase
+        .schema("tracking")
+        .table("tracked_vessels")
+        .select("id")
+        .eq(
+            "mmsi",
+            normalized_mmsi,
+        )
+        .limit(1)
+        .execute()
+    )
+
+    if existing_result.data:
+        result = (
+            supabase
+            .schema("tracking")
+            .table("tracked_vessels")
+            .update(payload)
+            .eq(
+                "id",
+                existing_result.data[0]["id"],
+            )
+            .execute()
+        )
+
+        if not result.data:
+            raise RuntimeError("Failed to update tracked vessel.")
+
+        return result.data[0]
 
     result = (
         supabase

@@ -6,17 +6,15 @@ import streamlit as st
 
 from collection_log_repository import get_latest_collection_run
 from latest_position_repository import get_latest_positions
+from position_repository import upsert_position
 from tracking_repository import (
     add_tracking_vessel,
     disable_tracking_vessel,
     get_tracking_status,
 )
 from trajectory_repository import get_vessel_track
-from vessel_query_repository import (
-    get_vessel_by_imo,
-    get_vessel_by_mmsi,
-    get_vessel_current_status,
-)
+from vessel_live_query_repository import search_vessel_live
+from vessel_repository import upsert_vessel
 
 
 st.set_page_config(
@@ -50,14 +48,29 @@ def _valid_position_dataframe(records):
     )
 
 
-def _single_position_chart(position):
-    if not position:
-        st.info("No current position available.")
-        return
+def _display_metrics(record, fields):
+    columns = st.columns(len(fields))
 
+    for column, (label, key) in zip(
+        columns,
+        fields,
+    ):
+        value = "-"
+        if record:
+            value = record.get(key)
+            if value is None:
+                value = "-"
+
+        column.metric(
+            label,
+            value,
+        )
+
+
+def _single_position_chart(position):
     map_data = _valid_position_dataframe([position])
     if map_data.empty:
-        st.info("No valid coordinates available.")
+        st.info("No valid current coordinates available.")
         return
 
     point = map_data.iloc[0]
@@ -114,7 +127,7 @@ def _all_positions_chart(positions):
 def _track_chart(track_points, current_index):
     map_data = _valid_position_dataframe(track_points)
     if map_data.empty:
-        st.info("No valid coordinates available.")
+        st.info("No valid historical coordinates available.")
         return
 
     map_data = map_data.sort_values("observed_at").reset_index(drop=True)
@@ -198,21 +211,11 @@ def _track_chart(track_points, current_index):
     )
 
 
-def _display_metrics(record, fields):
-    columns = st.columns(len(fields))
-
-    for column, (label, key) in zip(
-        columns,
-        fields,
-    ):
-        column.metric(
-            label,
-            record.get(key) if record else "-",
-        )
-
-
 def render_vessel_search():
     st.subheader("A. Vessel Search")
+
+    if "live_vessel" not in st.session_state:
+        st.session_state.live_vessel = None
 
     col_type, col_query = st.columns(
         [
@@ -233,38 +236,29 @@ def render_vessel_search():
         placeholder="Enter MMSI or IMO",
     )
 
-    if "selected_mmsi" not in st.session_state:
-        st.session_state.selected_mmsi = None
-
-    if st.button("Search Vessel"):
+    if st.button("Search Chinaports"):
         normalized_query = query.strip()
         if not normalized_query:
             st.warning("Please enter an MMSI or IMO.")
-            return None
+            return st.session_state.live_vessel
 
         try:
-            if search_type == "MMSI":
-                vessel = get_vessel_by_mmsi(normalized_query)
-            else:
-                vessel = get_vessel_by_imo(normalized_query)
+            st.session_state.live_vessel = search_vessel_live(
+                normalized_query,
+                search_type=search_type.lower(),
+            )
         except Exception as exc:
-            st.error(f"Vessel query failed: {exc}")
+            st.session_state.live_vessel = None
+            st.error(f"Chinaports query failed: {exc}")
             return None
 
-        if not vessel:
-            st.warning("No vessel found.")
+        if not st.session_state.live_vessel:
+            st.warning("No vessel found from Chinaports.")
             return None
 
-        st.session_state.selected_mmsi = vessel.get("mmsi")
-
-    selected_mmsi = st.session_state.selected_mmsi
-    if not selected_mmsi:
-        st.info("Search by MMSI or IMO to inspect a vessel.")
-        return None
-
-    vessel = get_vessel_by_mmsi(selected_mmsi)
+    vessel = st.session_state.live_vessel
     if not vessel:
-        st.warning("Selected vessel no longer exists in core.vessels.")
+        st.info("Search Chinaports by MMSI or IMO to inspect a vessel.")
         return None
 
     _display_metrics(
@@ -291,7 +285,16 @@ def render_tracking_control(vessel):
         return
 
     mmsi = vessel.get("mmsi")
-    tracking_status = get_tracking_status(mmsi)
+    if not mmsi:
+        st.warning("This Chinaports result has no MMSI, so it cannot be tracked.")
+        return
+
+    try:
+        tracking_status = get_tracking_status(mmsi)
+    except Exception as exc:
+        tracking_status = None
+        st.error(f"Tracking status query failed: {exc}")
+
     is_active = bool(
         tracking_status
         and tracking_status.get("is_active")
@@ -307,10 +310,18 @@ def render_tracking_control(vessel):
         disabled=is_active,
     ):
         try:
+            vessel_result = upsert_vessel(vessel)
+            vessel_id = None
+            if vessel_result:
+                vessel_id = vessel_result[0].get("id")
+
+            raw_data = vessel.get("raw_data") or vessel
+            upsert_position(raw_data)
             add_tracking_vessel(
                 mmsi,
                 tracking_mode="history_tracking",
                 priority=0,
+                vessel_id=vessel_id,
             )
             st.success("Tracking enabled")
             st.rerun()
@@ -342,27 +353,13 @@ def render_current_position(vessel):
     st.subheader("C. Current Position")
 
     if not vessel:
-        st.info("Search a vessel to view its current position.")
+        st.info("Search a vessel to view its live position.")
         latest_positions = get_latest_positions()
         _all_positions_chart(latest_positions)
         return
 
-    try:
-        current_status = get_vessel_current_status(vessel.get("mmsi"))
-    except Exception as exc:
-        st.error(f"Current position query failed: {exc}")
-        return
-
-    latest_position = None
-    if current_status:
-        latest_position = current_status.get("latest_position")
-
-    if not latest_position:
-        st.info("No latest position found for this vessel.")
-        return
-
     _display_metrics(
-        latest_position,
+        vessel,
         [
             ("Latitude", "latitude"),
             ("Longitude", "longitude"),
@@ -372,7 +369,7 @@ def render_current_position(vessel):
             ("Observed Time", "observed_at"),
         ],
     )
-    _single_position_chart(latest_position)
+    _single_position_chart(vessel)
 
 
 def _observed_time_options(track_points):
@@ -386,8 +383,8 @@ def _observed_time_options(track_points):
 def render_historical_track_playback(vessel):
     st.subheader("D. Historical Track Playback")
 
-    if not vessel:
-        st.info("Search a vessel to play historical track.")
+    if not vessel or not vessel.get("mmsi"):
+        st.info("Search a vessel with MMSI to play historical track.")
         return
 
     mmsi = vessel.get("mmsi")
@@ -421,7 +418,7 @@ def render_historical_track_playback(vessel):
         return
 
     if not track_points:
-        st.info("No historical track points found.")
+        st.info("No historical track points found in Supabase.")
         return
 
     time_options = _observed_time_options(track_points)
