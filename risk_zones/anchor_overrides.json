@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "description": "Manual anchor overrides for JWLA boundary parsing. Only manually verified anchors with source references belong in anchors.",
+  "anchors": {}
+}

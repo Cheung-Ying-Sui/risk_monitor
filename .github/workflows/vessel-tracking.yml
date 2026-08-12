@@ -31,3 +31,7 @@ jobs:
       - name: Fetch vessel positions
         run: |
           python scripts/fetch_vessel_positions_job.py
+
+      - name: Run risk matching
+        run: |
+          python scripts/run_risk_matching_job.py

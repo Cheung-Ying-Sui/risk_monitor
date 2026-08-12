@@ -4,3 +4,5 @@ python-dotenv
 supabase
 pandas
 streamlit
+shapely==2.1.2
+pyproj==3.7.2

@@ -1,0 +1,8 @@
+review_id,zone_name,anchor_name,anchor_type,status,reason,suggested_action,raw_text,decision,longitude,latitude,source_name,source_reference,verified_by,verified_at,notes
+152bb7469c6bd9ca,Gulf of Guinea,Togo,country_coastline,ambiguous,country_boundary_includes_land_borders_not_only_coastline,resolve_with_coastline_gis,Togo,pending,,,,,,,
+4144e7e24fbc045f,Sea of Azov and Black Sea,Russia-Georgia,country_border,unresolved,"missing_country_feature:Georgia, coastal_endpoint_requires_land_mask_disambiguation",add_complete_country_boundary_data,Russia-Georgia border,pending,,,,,,,
+5f379fb6d09319b1,Cabo Delgado,Baía do Lúrio,named_anchor,manual_required,manual_anchor_missing,manual_coordinate_verification,Baía do Lúrio,pending,,,,,,,
+8444ac64a0410214,Sea of Azov and Black Sea,Ukraine-Romania,country_border,unresolved,"missing_country_feature:Romania, coastal_endpoint_requires_land_mask_disambiguation",add_complete_country_boundary_data,Ukraine-Romania border,pending,,,,,,,
+8adc9850db10a72a,Gulf of Guinea,Cape Lopez Peninsula,named_anchor,manual_required,manual_anchor_missing,manual_coordinate_verification,Cape Lopez Peninsula,pending,,,,,,,
+e0d39a2ef3e96f89,"Persian/Arabian Gulf, Gulf of Oman, Gulf of Aden and Southern Red Sea",Pakistan,country_coastline,ambiguous,country_boundary_includes_land_borders_not_only_coastline,resolve_with_coastline_gis,Pakistan,pending,,,,,,,
+f8bed895efa01c65,Cabo Delgado,Mnazi Bay,named_anchor,manual_required,manual_anchor_missing,manual_coordinate_verification,Mnazi Bay,pending,,,,,,,

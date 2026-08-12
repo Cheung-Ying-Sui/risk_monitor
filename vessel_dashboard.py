@@ -7,6 +7,10 @@ import streamlit as st
 from collection_log_repository import get_latest_collection_run
 from latest_position_repository import get_latest_positions
 from position_repository import upsert_position
+from risk_repository import (
+    get_active_risk_zones_geojson,
+    get_vessel_current_risk,
+)
 from tracking_repository import (
     add_tracking_vessel,
     disable_tracking_vessel,
@@ -74,6 +78,7 @@ def _single_position_chart(position):
         return
 
     point = map_data.iloc[0]
+    risk_zone_layers = _risk_zone_layers()
 
     st.pydeck_chart(
         pdk.Deck(
@@ -85,6 +90,7 @@ def _single_position_chart(position):
                 pitch=0,
             ),
             layers=[
+                *risk_zone_layers,
                 pdk.Layer(
                     "ScatterplotLayer",
                     data=map_data,
@@ -101,6 +107,9 @@ def _single_position_chart(position):
             ],
             tooltip={
                 "text": (
+                    "Zone Name: {zone_name}\n"
+                    "Source: {source}\n"
+                    "Source Document: {source_document}\n"
                     "MMSI: {mmsi}\n"
                     "Observed: {observed_at}\n"
                     "SOG: {sog}\n"
@@ -111,16 +120,190 @@ def _single_position_chart(position):
     )
 
 
+def _risk_zone_feature_collection():
+    try:
+        active_zones = get_active_risk_zones_geojson()
+    except Exception:
+        st.info("Risk zone layer unavailable")
+        return None
+
+    features = []
+    for zone in active_zones:
+        geometry = zone.get("geometry_geojson")
+        if not geometry:
+            continue
+
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": geometry,
+                "properties": {
+                    "zone_id": zone.get("zone_id"),
+                    "zone_version_id": zone.get("zone_version_id"),
+                    "zone_name": zone.get("zone_name"),
+                    "zone_type": zone.get("zone_type"),
+                    "source": zone.get("source"),
+                    "source_document": zone.get("source_document"),
+                    "effective_date": zone.get("effective_date"),
+                },
+            }
+        )
+
+    if not features:
+        return None
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+    }
+
+
+def _risk_zone_layers():
+    feature_collection = _risk_zone_feature_collection()
+    if not feature_collection:
+        return []
+
+    return [
+        pdk.Layer(
+            "GeoJsonLayer",
+            data=feature_collection,
+            pickable=True,
+            stroked=True,
+            filled=True,
+            get_fill_color=[
+                220,
+                60,
+                40,
+                45,
+            ],
+            get_line_color=[
+                180,
+                35,
+                35,
+                190,
+            ],
+            get_line_width=2,
+        )
+    ]
+
+
+def _has_current_position(vessel):
+    return bool(
+        vessel
+        and vessel.get("latitude") is not None
+        and vessel.get("longitude") is not None
+        and vessel.get("observed_at") is not None
+    )
+
+
+def render_risk_status(vessel):
+    st.subheader("JWLA Risk Status")
+
+    if not vessel:
+        st.info("Search a vessel to view JWLA risk status.")
+        return
+
+    mmsi = vessel.get("mmsi")
+    if not mmsi:
+        st.warning("Risk status unavailable: vessel has no MMSI.")
+        return
+
+    if not _has_current_position(vessel):
+        st.info("Risk status unavailable: no latest position available.")
+        return
+
+    try:
+        risk_hits = get_vessel_current_risk(mmsi)
+    except Exception as exc:
+        st.warning(f"Risk status unavailable: {exc}")
+        return
+
+    if not risk_hits:
+        col_status, col_area = st.columns(2)
+        col_status.metric("JWLA Risk Status", "CLEAR")
+        col_area.metric("Current Listed Area", "None")
+        st.info(
+            "CLEAR means the current latest vessel position does not intersect "
+            "an active JWLA Listed Area."
+        )
+        return
+
+    st.warning("JWLA Risk Status: IN LISTED AREA")
+    st.metric("Listed Area Hits", len(risk_hits))
+
+    dataframe = _to_dataframe(risk_hits)
+    if dataframe.empty:
+        st.warning("Risk status unavailable: invalid risk response.")
+        return
+
+    if "source" not in dataframe.columns:
+        dataframe["source"] = "JWLA"
+
+    visible_columns = [
+        "zone_name",
+        "zone_type",
+        "source",
+        "source_document",
+        "effective_date",
+        "observed_at",
+    ]
+    st.dataframe(
+        dataframe[
+            [
+                column
+                for column in visible_columns
+                if column in dataframe.columns
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def _all_positions_chart(positions):
     map_data = _valid_position_dataframe(positions)
     if map_data.empty:
         st.info("No valid current vessel positions available.")
         return
 
-    st.map(
-        map_data,
-        latitude="lat",
-        longitude="lon",
+    first_point = map_data.iloc[0]
+    risk_zone_layers = _risk_zone_layers()
+
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(
+                latitude=float(first_point["lat"]),
+                longitude=float(first_point["lon"]),
+                zoom=4,
+                pitch=0,
+            ),
+            layers=[
+                *risk_zone_layers,
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=map_data,
+                    get_position="[lon, lat]",
+                    get_radius=180,
+                    get_fill_color=[
+                        220,
+                        60,
+                        40,
+                        220,
+                    ],
+                    pickable=True,
+                ),
+            ],
+            tooltip={
+                "text": (
+                    "Zone Name: {zone_name}\n"
+                    "Source: {source}\n"
+                    "Source Document: {source_document}\n"
+                    "MMSI: {mmsi}\n"
+                    "Observed: {observed_at}"
+                )
+            },
+        )
     )
 
 
@@ -146,6 +329,7 @@ def _track_chart(track_points, current_index):
             "lat",
         ]
     ].values.tolist()
+    risk_zone_layers = _risk_zone_layers()
 
     st.pydeck_chart(
         pdk.Deck(
@@ -157,6 +341,7 @@ def _track_chart(track_points, current_index):
                 pitch=0,
             ),
             layers=[
+                *risk_zone_layers,
                 pdk.Layer(
                     "PathLayer",
                     data=[
@@ -201,6 +386,9 @@ def _track_chart(track_points, current_index):
             ],
             tooltip={
                 "text": (
+                    "Zone Name: {zone_name}\n"
+                    "Source: {source}\n"
+                    "Source Document: {source_document}\n"
                     "MMSI: {mmsi}\n"
                     "Observed: {observed_at}\n"
                     "SOG: {sog}\n"
@@ -370,6 +558,7 @@ def render_current_position(vessel):
         ],
     )
     _single_position_chart(vessel)
+    render_risk_status(vessel)
 
 
 def _observed_time_options(track_points):
