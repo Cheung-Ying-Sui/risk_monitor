@@ -10,13 +10,14 @@ sys.path.insert(
     str(PROJECT_ROOT),
 )
 
-from chinaports_client import fetch_ship_info
+from chinaports_client import ChinaportsClientError, fetch_ship_info
 from collection_repository import (
     create_collection_run,
     finish_collection_run,
     record_collection_item_failure,
     record_collection_item_success,
 )
+from latest_position_repository import get_latest_position_by_mmsi
 from position_repository import upsert_position
 from supabase_client import supabase
 from vessel_repository import upsert_vessel
@@ -127,9 +128,26 @@ def process_vessel(record):
         f"priority={record.get('priority')}"
     )
 
-    vessel_data = fetch_ship_info(
-        mmsi
-    )
+    try:
+        vessel_data = fetch_ship_info(
+            mmsi
+        )
+    except ChinaportsClientError as exc:
+        latest_position = get_latest_position_by_mmsi(
+            mmsi
+        )
+        if latest_position:
+            return {
+                "mmsi": mmsi,
+                "status": "skipped_existing_position",
+                "reason": "chinaports_unavailable",
+                "latest_position_id": latest_position.get("position_id"),
+                "observed_at": latest_position.get("observed_at"),
+            }
+
+        raise RuntimeError(
+            f"Chinaports unavailable and no latest position for mmsi={mmsi}: {exc}"
+        ) from exc
 
     if not vessel_data:
         raise RuntimeError(
@@ -180,6 +198,11 @@ def main():
                 run_id,
                 mmsi,
             )
+            if result.get("status") == "skipped_existing_position":
+                print(
+                    "Skipped Chinaports refresh; using existing latest position "
+                    f"mmsi={mmsi} observed_at={result.get('observed_at')}"
+                )
             print(
                 f"Success mmsi={mmsi}: {result}"
             )

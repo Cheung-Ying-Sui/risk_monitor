@@ -2,7 +2,7 @@ from supabase_client import supabase
 
 
 LATEST_POSITION_FIELDS = (
-    "vessel_id,mmsi,latitude,longitude,sog,cog,heading,"
+    "vessel_id,position_id,mmsi,latitude,longitude,sog,cog,heading,"
     "destination,nav_status,observed_at,received_at,source_id"
 )
 

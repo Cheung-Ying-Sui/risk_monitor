@@ -449,6 +449,13 @@ def render_vessel_search():
         st.info("Search Chinaports by MMSI or IMO to inspect a vessel.")
         return None
 
+    if vessel.get("dashboard_source") == "supabase":
+        warning = vessel.get("dashboard_warning")
+        message = "Showing vessel data from Supabase because Chinaports is unavailable."
+        if warning:
+            message = f"{message} Chinaports error: {warning}"
+        st.warning(message)
+
     _display_metrics(
         vessel,
         [

@@ -1,5 +1,7 @@
 from chinaports_client import fetch_ship_info
+from latest_position_repository import get_latest_position_by_mmsi
 from position_repository import parse_coordinate, parse_timestamp, to_numeric
+from vessel_query_repository import get_vessel_by_imo, get_vessel_by_mmsi
 
 
 def _clean_value(value):
@@ -80,6 +82,52 @@ def _normalize_live_vessel(raw_data):
     }
 
 
+def _merge_latest_position(vessel, source="supabase", warning=None):
+    if not vessel or not vessel.get("mmsi"):
+        return vessel
+
+    latest_position = get_latest_position_by_mmsi(vessel["mmsi"])
+    metadata = {
+        "dashboard_source": source,
+    }
+    if warning:
+        metadata["dashboard_warning"] = warning
+
+    if not latest_position:
+        return {
+            **vessel,
+            **metadata,
+            "raw_data": vessel.get("raw_data") or vessel,
+        }
+
+    return {
+        **vessel,
+        **{
+            key: value
+            for key, value in latest_position.items()
+            if value is not None
+        },
+        **metadata,
+        "raw_data": vessel.get("raw_data") or vessel,
+    }
+
+
+def _search_vessel_from_supabase(query, search_type, warning=None):
+    if search_type == "imo":
+        vessel = get_vessel_by_imo(query)
+    else:
+        vessel = get_vessel_by_mmsi(query)
+
+    if not vessel:
+        return None
+
+    return _merge_latest_position(
+        vessel,
+        source="supabase",
+        warning=warning,
+    )
+
+
 def search_vessel_live(query, search_type="mmsi"):
     normalized_query = str(query or "").strip()
     if not normalized_query:
@@ -89,9 +137,31 @@ def search_vessel_live(query, search_type="mmsi"):
     if normalized_search_type not in {"mmsi", "imo"}:
         raise ValueError("search_type must be mmsi or imo.")
 
-    raw_data = fetch_ship_info(normalized_query)
-    vessel = _normalize_live_vessel(raw_data)
-    if not vessel:
-        return None
+    cached_vessel = _search_vessel_from_supabase(
+        normalized_query,
+        normalized_search_type,
+    )
+    if cached_vessel:
+        return cached_vessel
 
-    return vessel
+    try:
+        raw_data = fetch_ship_info(normalized_query)
+        vessel = _normalize_live_vessel(raw_data)
+    except Exception as exc:
+        return _search_vessel_from_supabase(
+            normalized_query,
+            normalized_search_type,
+            warning=str(exc),
+        )
+
+    if not vessel or not vessel.get("mmsi"):
+        return _search_vessel_from_supabase(
+            normalized_query,
+            normalized_search_type,
+            warning="Chinaports returned no usable vessel data.",
+        )
+
+    return _merge_latest_position(
+        vessel,
+        source="chinaports",
+    )
