@@ -1,4 +1,4 @@
-from supabase_client import supabase
+from risk_monitor.supabase_client import supabase
 
 
 LATEST_POSITION_FIELDS = (

@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 RPC_MIGRATION = Path("supabase/migrations/20260812009000_create_risk_spatial_matching_rpc.sql")
-REPOSITORY = Path("risk_repository.py")
+REPOSITORY = Path("risk_monitor/risk_repository.py")
 
 
 def test_rpc_migration_static_sql():

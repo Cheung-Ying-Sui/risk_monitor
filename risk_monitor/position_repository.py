@@ -1,7 +1,7 @@
 import re
 from datetime import datetime, timedelta, timezone
 
-from supabase_client import supabase
+from risk_monitor.supabase_client import supabase
 
 
 def clean_val(value):

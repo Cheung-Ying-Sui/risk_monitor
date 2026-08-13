@@ -4,21 +4,22 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-from collection_log_repository import get_latest_collection_run
-from latest_position_repository import get_latest_positions
-from position_repository import upsert_position
-from risk_repository import (
+from risk_monitor.collection_log_repository import get_latest_collection_run
+from risk_monitor.eta_repository import get_vessel_eta_estimate
+from risk_monitor.latest_position_repository import get_latest_positions
+from risk_monitor.position_repository import upsert_position
+from risk_monitor.risk_repository import (
     get_active_risk_zones_geojson,
     get_vessel_current_risk,
 )
-from tracking_repository import (
+from risk_monitor.tracking_repository import (
     add_tracking_vessel,
     disable_tracking_vessel,
     get_tracking_status,
 )
-from trajectory_repository import get_vessel_track
-from vessel_live_query_repository import search_vessel_live
-from vessel_repository import upsert_vessel
+from risk_monitor.trajectory_repository import get_vessel_track
+from risk_monitor.vessel_live_query_repository import search_vessel_live
+from risk_monitor.vessel_repository import upsert_vessel
 
 
 st.set_page_config(
@@ -71,7 +72,108 @@ def _display_metrics(record, fields):
         )
 
 
-def _single_position_chart(position):
+def _route_coordinates(eta_result):
+    route_geojson = (eta_result or {}).get("estimated_route_geojson") or {}
+    if route_geojson.get("type") != "LineString":
+        return []
+
+    coordinates = route_geojson.get("coordinates") or []
+    return [
+        coordinate
+        for coordinate in coordinates
+        if isinstance(coordinate, list)
+        and len(coordinate) >= 2
+        and coordinate[0] is not None
+        and coordinate[1] is not None
+    ]
+
+
+def _estimated_route_layer(eta_result):
+    coordinates = _route_coordinates(eta_result)
+    if len(coordinates) < 2:
+        return []
+
+    return [
+        pdk.Layer(
+            "PathLayer",
+            data=[
+                {
+                    "path": coordinates,
+                    "layer_name": "Estimated Route",
+                    "route_method": eta_result.get("route_method"),
+                    "distance_method": eta_result.get("distance_method"),
+                }
+            ],
+            get_path="path",
+            get_color=[
+                245,
+                158,
+                11,
+                210,
+            ],
+            width_min_pixels=3,
+            pickable=True,
+        )
+    ]
+
+
+def _destination_marker_layer(eta_result):
+    if not eta_result:
+        return []
+
+    latitude = eta_result.get("destination_latitude")
+    longitude = eta_result.get("destination_longitude")
+    if latitude is None or longitude is None:
+        return []
+
+    destination_data = pd.DataFrame(
+        [
+            {
+                "lat": latitude,
+                "lon": longitude,
+                "layer_name": "Destination",
+                "destination": eta_result.get("destination_normalized")
+                or eta_result.get("destination_raw"),
+                "unlocode": eta_result.get("destination_unlocode") or "-",
+                "baseline_eta": eta_result.get("baseline_estimated_eta") or "-",
+            }
+        ]
+    )
+
+    return [
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=destination_data,
+            get_position="[lon, lat]",
+            get_radius=260,
+            get_fill_color=[
+                22,
+                163,
+                74,
+                230,
+            ],
+            pickable=True,
+        )
+    ]
+
+
+def _route_legend():
+    st.caption(
+        "Legend: Vessel = red marker | Historical Track = blue line | "
+        "Estimated Route = amber line | JWLA Listed Area = red polygon | "
+        "Destination = green marker"
+    )
+
+
+def _route_disclaimer():
+    st.caption(
+        "Estimated route is a baseline approximation for insurance risk "
+        "analysis. It is not intended for vessel navigation or operational "
+        "route planning."
+    )
+
+
+def _single_position_chart(position, eta_result=None):
     map_data = _valid_position_dataframe([position])
     if map_data.empty:
         st.info("No valid current coordinates available.")
@@ -91,6 +193,8 @@ def _single_position_chart(position):
             ),
             layers=[
                 *risk_zone_layers,
+                *_estimated_route_layer(eta_result),
+                *_destination_marker_layer(eta_result),
                 pdk.Layer(
                     "ScatterplotLayer",
                     data=map_data,
@@ -113,11 +217,18 @@ def _single_position_chart(position):
                     "MMSI: {mmsi}\n"
                     "Observed: {observed_at}\n"
                     "SOG: {sog}\n"
-                    "COG: {cog}"
+                    "COG: {cog}\n"
+                    "Layer: {layer_name}\n"
+                    "Destination: {destination}\n"
+                    "UN/LOCODE: {unlocode}\n"
+                    "Baseline ETA: {baseline_eta}"
                 )
             },
         )
     )
+    if eta_result:
+        _route_legend()
+        _route_disclaimer()
 
 
 def _risk_zone_feature_collection():
@@ -307,7 +418,7 @@ def _all_positions_chart(positions):
     )
 
 
-def _track_chart(track_points, current_index):
+def _track_chart(track_points, current_index, eta_result=None):
     map_data = _valid_position_dataframe(track_points)
     if map_data.empty:
         st.info("No valid historical coordinates available.")
@@ -357,6 +468,8 @@ def _track_chart(track_points, current_index):
                     ],
                     width_min_pixels=4,
                 ),
+                *_estimated_route_layer(eta_result),
+                *_destination_marker_layer(eta_result),
                 pdk.Layer(
                     "ScatterplotLayer",
                     data=visible_data,
@@ -392,11 +505,18 @@ def _track_chart(track_points, current_index):
                     "MMSI: {mmsi}\n"
                     "Observed: {observed_at}\n"
                     "SOG: {sog}\n"
-                    "COG: {cog}"
+                    "COG: {cog}\n"
+                    "Layer: {layer_name}\n"
+                    "Destination: {destination}\n"
+                    "UN/LOCODE: {unlocode}\n"
+                    "Baseline ETA: {baseline_eta}"
                 )
             },
         )
     )
+    if eta_result:
+        _route_legend()
+        _route_disclaimer()
 
 
 def render_vessel_search():
@@ -544,7 +664,22 @@ def render_tracking_control(vessel):
     )
 
 
-def render_current_position(vessel):
+def _get_eta_result(vessel):
+    if not vessel or not vessel.get("mmsi"):
+        return None
+
+    try:
+        return get_vessel_eta_estimate(vessel.get("mmsi"))
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "warnings": [
+                f"ETA unavailable: {exc}",
+            ],
+        }
+
+
+def render_current_position(vessel, eta_result=None):
     st.subheader("C. Current Position")
 
     if not vessel:
@@ -564,8 +699,167 @@ def render_current_position(vessel):
             ("Observed Time", "observed_at"),
         ],
     )
-    _single_position_chart(vessel)
+    _single_position_chart(vessel, eta_result=eta_result)
     render_risk_status(vessel)
+
+
+def _format_number(value, suffix="", decimals=1):
+    if value is None:
+        return "-"
+
+    try:
+        return f"{float(value):,.{decimals}f}{suffix}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _format_upper(value):
+    if not value:
+        return "-"
+
+    return str(value).upper()
+
+
+def _user_friendly_eta_warnings(warnings):
+    messages = []
+    for warning in warnings or []:
+        if str(warning).startswith("regional_corridor:"):
+            message = "Estimated route uses a regional baseline maritime corridor."
+        elif "navigable_route_unavailable" in str(warning):
+            message = (
+                "Navigable route estimate unavailable. ETA falls back to "
+                "great-circle distance."
+            )
+        elif warning == "destination_unresolved":
+            message = "Destination could not be resolved to a verified port."
+        elif warning == "destination_not_port":
+            message = "Destination text does not describe a port."
+        else:
+            message = str(warning).replace("_", " ").capitalize()
+        if message not in messages:
+            messages.append(message)
+    return messages
+
+
+def render_eta_estimate(vessel, eta_result=None):
+    st.subheader("D. ETA Estimate")
+
+    if not vessel or not vessel.get("mmsi"):
+        st.info("Search a vessel with MMSI to view baseline ETA.")
+        return
+
+    if eta_result is None:
+        eta_result = _get_eta_result(vessel)
+
+    warnings = eta_result.get("warnings") or []
+    if eta_result.get("status") != "estimated":
+        friendly_warnings = _user_friendly_eta_warnings(warnings)
+        reason = ", ".join(friendly_warnings) if friendly_warnings else "unavailable"
+        st.info(f"ETA unavailable: {reason}")
+        destination_raw = eta_result.get("destination_raw")
+        if destination_raw:
+            st.metric("Destination", destination_raw)
+        return
+
+    col_destination, col_distance, col_speed = st.columns(3)
+    col_time, col_eta, col_confidence = st.columns(3)
+
+    col_destination.metric(
+        "Destination",
+        eta_result.get("destination_normalized")
+        or eta_result.get("destination_raw")
+        or "-",
+    )
+    col_distance.metric(
+        "Remaining Distance",
+        _format_number(
+            eta_result.get("remaining_distance_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_speed.metric(
+        "Estimated Sailing Speed",
+        _format_number(
+            eta_result.get("estimated_speed_knots"),
+            suffix=" kn",
+        ),
+    )
+    col_time.metric(
+        "Estimated Time Remaining",
+        _format_number(
+            eta_result.get("estimated_remaining_hours"),
+            suffix=" h",
+        ),
+    )
+    col_eta.metric(
+        "Baseline ETA",
+        eta_result.get("baseline_estimated_eta") or "-",
+    )
+    col_confidence.metric(
+        "Confidence",
+        _format_upper(eta_result.get("confidence")),
+    )
+    st.metric(
+        "Route Method",
+        eta_result.get("route_method")
+        or eta_result.get("distance_method")
+        or "-",
+    )
+
+    if eta_result.get("distance_method") == "navigable_route_baseline":
+        col_gc, col_route, col_ratio = st.columns(3)
+        col_gc.metric(
+            "Great-circle Distance",
+            _format_number(
+                eta_result.get("great_circle_distance_nm"),
+                suffix=" nm",
+            ),
+        )
+        col_route.metric(
+            "Navigable Distance",
+            _format_number(
+                eta_result.get("navigable_distance_nm"),
+                suffix=" nm",
+            ),
+        )
+        col_ratio.metric(
+            "Route Ratio",
+            _format_number(
+                eta_result.get("route_distance_ratio"),
+                decimals=3,
+            ),
+        )
+
+    if eta_result.get("reported_ais_eta"):
+        col_reported, col_baseline, col_delta = st.columns(3)
+        col_reported.metric(
+            "AIS Reported ETA",
+            eta_result.get("reported_ais_eta"),
+        )
+        col_baseline.metric(
+            "Baseline ETA",
+            eta_result.get("baseline_estimated_eta") or "-",
+        )
+        col_delta.metric(
+            "ETA Difference",
+            _format_number(
+                eta_result.get("eta_difference_hours"),
+                suffix=" h",
+            ),
+        )
+
+    if warnings:
+        st.caption(
+            "ETA warnings: "
+            f"{' '.join(_user_friendly_eta_warnings(warnings))}"
+        )
+
+    st.caption(
+        "Baseline ETA is an indicative estimate based on current position, "
+        "destination and recent vessel speed. It does not account for "
+        "navigable route constraints, weather, congestion, waiting time or "
+        "operational changes."
+    )
 
 
 def _observed_time_options(track_points):
@@ -576,8 +870,8 @@ def _observed_time_options(track_points):
     ]
 
 
-def render_historical_track_playback(vessel):
-    st.subheader("D. Historical Track Playback")
+def render_historical_track_playback(vessel, eta_result=None):
+    st.subheader("E. Historical Track Playback")
 
     if not vessel or not vessel.get("mmsi"):
         st.info("Search a vessel with MMSI to play historical track.")
@@ -664,6 +958,7 @@ def render_historical_track_playback(vessel):
     _track_chart(
         visible_track_points,
         current_index=len(visible_track_points) - 1,
+        eta_result=eta_result,
     )
 
     dataframe = _to_dataframe(track_points)
@@ -703,7 +998,7 @@ def render_historical_track_playback(vessel):
 
 
 def render_collection_status():
-    st.subheader("E. Collection Status")
+    st.subheader("F. Collection Status")
 
     try:
         latest_run = get_latest_collection_run()
@@ -731,9 +1026,11 @@ def main():
     st.title("Vessel Risk Monitor Dashboard")
 
     vessel = render_vessel_search()
+    eta_result = _get_eta_result(vessel)
     render_tracking_control(vessel)
-    render_current_position(vessel)
-    render_historical_track_playback(vessel)
+    render_current_position(vessel, eta_result=eta_result)
+    render_eta_estimate(vessel, eta_result=eta_result)
+    render_historical_track_playback(vessel, eta_result=eta_result)
     render_collection_status()
 
 

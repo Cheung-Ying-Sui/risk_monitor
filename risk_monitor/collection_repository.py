@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from supabase_client import supabase
+from risk_monitor.supabase_client import supabase
 
 
 def _utc_now():

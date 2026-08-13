@@ -2,7 +2,7 @@ import sys
 from postgrest.exceptions import APIError
 
 try:
-    from supabase_client import supabase
+    from risk_monitor.supabase_client import supabase
 except Exception as exc:
     print("Failed to initialize Supabase client.")
     print(f"Reason: {exc}")

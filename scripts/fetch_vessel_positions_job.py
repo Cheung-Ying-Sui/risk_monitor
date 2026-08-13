@@ -10,17 +10,17 @@ sys.path.insert(
     str(PROJECT_ROOT),
 )
 
-from chinaports_client import ChinaportsClientError, fetch_ship_info
-from collection_repository import (
+from risk_monitor.chinaports_client import ChinaportsClientError, fetch_ship_info
+from risk_monitor.collection_repository import (
     create_collection_run,
     finish_collection_run,
     record_collection_item_failure,
     record_collection_item_success,
 )
-from latest_position_repository import get_latest_position_by_mmsi
-from position_repository import upsert_position
-from supabase_client import supabase
-from vessel_repository import upsert_vessel
+from risk_monitor.latest_position_repository import get_latest_position_by_mmsi
+from risk_monitor.position_repository import upsert_position
+from risk_monitor.supabase_client import supabase
+from risk_monitor.vessel_repository import upsert_vessel
 
 
 TRACKING_MODES = [

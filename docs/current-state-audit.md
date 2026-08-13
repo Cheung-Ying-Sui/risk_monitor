@@ -35,11 +35,11 @@
 | --- | --- | --- | --- | --- | --- |
 | 按 MMSI 获取船舶信息 | 代码已实现但未运行验证 | 输入 MMSI，向 Chinaports 接口请求船舶信息 | `fetch_ship_info` | `获取船舶地理位置【已开发完成】/fetch_ship_location.py:13` | 否；仅 AST 检查通过 |
 | API Cookie 从环境变量读取 | 已验证 | 不在代码中硬编码 Cookie | 环境变量 `CHINAPORTS_COOKIE` | `fetch_ship_location.py:16`、`.env.example` | 是；只读代码验证 |
-| 坐标字符串转十进制度 | 已验证 | 把 `N 80度39.7752分` 形式转为 float | `parse_coordinate` | `loading_to_postgresql.py:56`、`dashboard-opengridwork.py:98` | 是；代码验证，未跑单元测试 |
+| 坐标字符串转十进制度 | 已验证 | 把 `N 80度39.7752分` 形式转为 float | `parse_coordinate` | `loading_to_postgresql.py:56`、`legacy/dashboard-opengridwork.py:98` | 是；代码验证，未跑单元测试 |
 | 时间字符串解析 | 已验证 | 把接口 `timeStamp` 解析为 `datetime`，失败时用当前时间兜底 | `parse_timestamp` | `loading_to_postgresql.py:33`、`:53` | 是；代码验证 |
 | 静态船舶数据 upsert | 代码已实现但未运行验证 | 将 MMSI、IMO、船名、呼号、船长宽、总吨写入静态表 | `upsert_vessel_static_data` | `loading_to_postgresql.py:76`、`:114` | 否；数据库未连通 |
 | 动态位置点保存 | 代码已实现但未运行验证 | 将经纬度、航速、航向、目的地、状态、观测时间写入动态表 | `upsert_vessel_dynamic_data` | `loading_to_postgresql.py:145`、`:193` | 否；数据库未连通 |
-| 实时船队看板 | 部分实现 | 在 Streamlit 中添加 MMSI、查看地图点、手动写入当前动态轨迹 | Streamlit 脚本 | `dashboard-opengridwork.py:130`、`:181`、`:351`、`:419` | 否；未启动前端 |
+| 实时船队看板 | 部分实现 | 在 Streamlit 中添加 MMSI、查看地图点、手动写入当前动态轨迹 | Streamlit 脚本 | `legacy/dashboard-opengridwork.py:130`、`:181`、`:351`、`:419` | 否；未启动前端 |
 | 自动 10 分钟采集 | 代码已实现但未运行验证 | 周期性读取静态表中的 MMSI 并抓取入库 | `automatic_fetch_dynamic_data.py` | `automatic_fetch_dynamic_data.py:39`、`:85` | 否；未启动长进程 |
 | 历史轨迹查询 | 代码已实现但未运行验证 | 按 MMSI 和过去小时数查询轨迹 | `fetch_vessel_data` | `船舶航迹回放.py:50`、`:70`、`:77` | 否；数据库未连通 |
 | 历史轨迹 HTML 回放 | 部分实现 | 生成 Folium 时间轴 HTML | `generate_track_playback` | `船舶航迹回放.py:97`、`:176`、`:225` | 部分；仓库已有生成后的 HTML，但未重新运行 |
@@ -65,17 +65,17 @@ flowchart LR
 
 ## 5. 船舶位置采集分析
 
-位置来源：Chinaports `https://ship.chinaports.com/ShipInit/shipInfo`，POST 表单调用。见 `fetch_ship_location.py:15`、`dashboard-opengridwork.py:79`。
+位置来源：Chinaports `https://ship.chinaports.com/ShipInit/shipInfo`，POST 表单调用。见 `fetch_ship_location.py:15`、`legacy/dashboard-opengridwork.py:79`。
 
 输入标识：主要输入是 MMSI，但参数名为 `userid`。见 `fetch_ship_location.py:34`。代码会读取返回中的 `mmsi`、`imo`、`shipname`、`callsign` 等字段。见 `loading_to_postgresql.py:85`、`:90`、`:91`、`:92`。
 
 返回字段使用情况：动态字段包括 `latitude`、`longitude`、`trueHeading`、`cog`、`sog`、`eta`、`destination`、`draught`、`navStatus`、`timeStamp`。见 `loading_to_postgresql.py:158` 到 `:168`。
 
-采集方式：既有手动，也有自动。手动来自脚本直接运行和 Streamlit 按钮；自动来自 `schedule.every(10).minutes.do(job)`。见 `fetch_ship_location.py:63`、`dashboard-opengridwork.py:181`、`automatic_fetch_dynamic_data.py:85`。
+采集方式：既有手动，也有自动。手动来自脚本直接运行和 Streamlit 按钮；自动来自 `schedule.every(10).minutes.do(job)`。见 `fetch_ship_location.py:63`、`legacy/dashboard-opengridwork.py:181`、`automatic_fetch_dynamic_data.py:85`。
 
 批量支持：自动任务会从 `"Marine Risk".vessel_static` 读取所有 MMSI；如果为空，使用 3 个硬编码测试 MMSI。见 `automatic_fetch_dynamic_data.py:24`、`:49`。
 
-限流、超时、重试：有 10 秒或 30 秒请求超时；没有明确重试、指数退避、429 处理或服务端限流。自动任务每船 sleep 1.5 秒。见 `fetch_ship_location.py:45`、`dashboard-opengridwork.py:91`、`automatic_fetch_dynamic_data.py:72`。
+限流、超时、重试：有 10 秒或 30 秒请求超时；没有明确重试、指数退避、429 处理或服务端限流。自动任务每船 sleep 1.5 秒。见 `fetch_ship_location.py:45`、`legacy/dashboard-opengridwork.py:91`、`automatic_fetch_dynamic_data.py:72`。
 
 重复写入风险：动态表 insert 没有 `ON CONFLICT`，代码仓库也没有 migration 定义唯一约束，因此同一 MMSI 同一 `record_time` 可能重复写入。见 `loading_to_postgresql.py:193`。
 
@@ -116,7 +116,7 @@ flowchart LR
 
 性能风险：数据量增长后，`mmsi + record_time` 缺索引会导致慢查询；一次性构造所有 Folium features 会使 HTML 文件变大并拖慢浏览器。
 
-前端地图组件：历史回放使用 Folium + Leaflet TimeDimension；实时看板使用 Streamlit + MapLibre；历史测试前端使用 Folium/streamlit-folium。见 `船舶航迹回放.py:5`、`:176`，`dashboard-opengridwork.py:275`，`历史测试前端/streamlit_dashboard.py:7`。
+前端地图组件：历史回放使用 Folium + Leaflet TimeDimension；实时看板使用 Streamlit + MapLibre；历史测试前端使用 Folium/streamlit-folium。见 `船舶航迹回放.py:5`、`:176`，`legacy/dashboard-opengridwork.py:275`，`历史测试前端/streamlit_dashboard.py:7`。
 
 ## 8. 运行方式
 
@@ -127,7 +127,7 @@ flowchart LR
 3. 必需环境变量名称：`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`、`CHINAPORTS_COOKIE`。不要把真实值写入代码或报告。
 4. 数据库要求：需要 PostgreSQL 中存在 schema `"Marine Risk"`，并存在 `vessel_static`、`vessel_dynamic` 表；`vessel_static.mmsi` 需要唯一约束才能支持 `ON CONFLICT (mmsi)`。
 5. 后端/脚本入口：当前位置获取 `python 获取船舶地理位置【已开发完成】/fetch_ship_location.py`；入库测试 `python 获取船舶地理位置【已开发完成】/loading_to_postgresql.py`；自动采集 `python 获取船舶地理位置【已开发完成】/automatic_fetch_dynamic_data.py`；历史回放 `python 船舶坐标管理、历史轨迹回放/船舶航迹回放.py`。
-6. 前端入口：`streamlit run dashboard-opengridwork.py`。
+6. 前端入口：当前主看板为 `streamlit run risk_monitor/vessel_dashboard.py`；旧版看板已归档到 `legacy/dashboard-opengridwork.py`。
 7. 最小验证步骤：先验证环境变量存在；再用一个 MMSI 调用实时接口；再确认静态表 upsert、动态表 insert；最后用同一 MMSI 生成历史回放 HTML。审计中未执行这些业务验证。
 
 ## 9. 测试与验证证据
@@ -138,7 +138,7 @@ flowchart LR
 
 | 测试 | 结果 | 说明 |
 | --- | --- | --- |
-| 目标 Python 文件 AST 语法解析 | 通过 | `fetch_ship_location.py`、`loading_to_postgresql.py`、`automatic_fetch_dynamic_data.py`、`vessel_manager.py`、`船舶航迹回放.py`、`dashboard-opengridwork.py` 等均可解析。 |
+| 目标 Python 文件 AST 语法解析 | 通过 | `fetch_ship_location.py`、`loading_to_postgresql.py`、`automatic_fetch_dynamic_data.py`、`vessel_manager.py`、`船舶航迹回放.py`、`legacy/dashboard-opengridwork.py` 等均可解析。 |
 | `.venv` 依赖存在性检查 | 通过 | `.venv/bin/python` 可找到目标功能依赖：`requests`、`dotenv`、`psycopg2`、`schedule`、`pandas`、`streamlit`、`folium`、`streamlit_folium`、`pydeck`、`supabase`。 |
 | 当前 shell Python 依赖检查 | 部分失败 | 当前 shell Python 找不到多个目标依赖，但 `.venv` 中存在。 |
 | PostgreSQL 只读连接验证 | 失败 | 只读事务连接返回 `OperationalError`，数据库运行状态未验证。 |
@@ -178,7 +178,7 @@ flowchart LR
 | `船舶航迹回放.py` | 保留并重构 | 已有回放原型，但 SQL 拼接、无分页抽稀 | `psycopg2`、`folium` | 接入前端前 |
 | `船舶数据传入PostgreSQL.py` 空文件 | 废弃或补齐说明 | 文件大小为 0，无功能证据 | 无 | 清理项目结构时 |
 | `vessel_track_playback.html` | 保留为样例产物 | 证明曾生成过回放 HTML，但不是源码能力本身 | Leaflet CDN | 写入 docs 或 examples 后 |
-| `dashboard-opengridwork.py` | 重构 | 是当前最完整实时前端，但混合 API、DB 写入和 HTML 注入 | Streamlit、MapLibre | 分离采集和 Web 应用时 |
+| `legacy/dashboard-opengridwork.py` | 重构 | 是历史实时前端，但混合 API、DB 写入和 HTML 注入 | Streamlit、MapLibre | 分离采集和 Web 应用时 |
 
 ## 12. 下一阶段的前置条件
 
@@ -239,15 +239,14 @@ flowchart LR
 | `船舶坐标管理、历史轨迹回放/船舶航迹回放.py` | `225` 到 `228` | 输出 `vessel_track_playback.html` |
 | `船舶坐标管理、历史轨迹回放/vessel_track_playback.html` | `6` 到 `15` | Leaflet/Folium 生成 HTML 依赖 |
 | `船舶坐标管理、历史轨迹回放/vessel_track_playback.html` | `108` 到 `154` | 已生成轨迹线和时间点数据 |
-| `dashboard-opengridwork.py` | `17` 到 `23` | 前端导入 PostgreSQL 写入模块 |
-| `dashboard-opengridwork.py` | `78` 到 `95` | Streamlit 内部实时接口调用 |
-| `dashboard-opengridwork.py` | `130` 到 `146` | 添加 MMSI 并写入静态表 |
-| `dashboard-opengridwork.py` | `181` 到 `187` | 按钮手动写入动态表 |
-| `dashboard-opengridwork.py` | `351` 到 `423` | MapLibre 地图渲染船舶点 |
+| `legacy/dashboard-opengridwork.py` | `17` 到 `23` | 前端导入 PostgreSQL 写入模块 |
+| `legacy/dashboard-opengridwork.py` | `78` 到 `95` | Streamlit 内部实时接口调用 |
+| `legacy/dashboard-opengridwork.py` | `130` 到 `146` | 添加 MMSI 并写入静态表 |
+| `legacy/dashboard-opengridwork.py` | `181` 到 `187` | 按钮手动写入动态表 |
+| `legacy/dashboard-opengridwork.py` | `351` 到 `423` | MapLibre 地图渲染船舶点 |
 | `历史测试前端/streamlit_dashboard.py` | `69` 到 `89` | 旧版实时获取逻辑 |
 | `历史测试前端/streamlit_dashboard.py` | `217` 到 `319` | Folium 实时地图展示 |
-| `vessel-monitor-backup.py` | `67` 到 `87` | 备份版实时获取逻辑 |
+| `legacy/vessel-monitor-backup.py` | `67` 到 `87` | 备份版实时获取逻辑 |
 | `requirements.txt` | `1` 到 `6` | 根依赖清单 |
 | `.env.example` | 全文件 | 环境变量名称示例，未记录任何秘密值 |
 | `.github/workflows/ofac-sync.yml` | `1` 到 `36` | GitHub Actions 存在，但目标是 OFAC，不是船舶定位 |
-

@@ -193,7 +193,7 @@ def apply_seed(payload):
         APIError = None
 
     try:
-        from supabase_client import supabase
+        from risk_monitor.supabase_client import supabase
     except ImportError as exc:
         raise RuntimeError(
             "supabase_client.py and supabase are required for --apply."

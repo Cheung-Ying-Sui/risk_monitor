@@ -10,11 +10,11 @@ sys.path.insert(
     str(PROJECT_ROOT),
 )
 
-from risk_repository import (  # noqa: E402
+from risk_monitor.risk_repository import (  # noqa: E402
     get_tracked_vessels_in_risk_zones,
     record_current_risk_matches,
 )
-from tracking_repository import get_tracked_vessels  # noqa: E402
+from risk_monitor.tracking_repository import get_tracked_vessels  # noqa: E402
 
 
 def _extract_inserted_count(record_result):

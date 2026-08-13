@@ -8,7 +8,7 @@ try:
 
     load_dotenv()
     load_dotenv(
-        Path(__file__).resolve().parent / "制裁筛查模块" / ".env",
+        Path(__file__).resolve().parents[1] / "制裁筛查模块" / ".env",
         override=False,
     )
 except ImportError:

@@ -1,4 +1,4 @@
-from vessel_repository import upsert_vessel
+from risk_monitor.vessel_repository import upsert_vessel
 
 
 test_vessel = {

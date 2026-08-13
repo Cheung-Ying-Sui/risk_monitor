@@ -1,7 +1,7 @@
-from chinaports_client import fetch_ship_info
-from latest_position_repository import get_latest_position_by_mmsi
-from position_repository import parse_coordinate, parse_timestamp, to_numeric
-from vessel_query_repository import get_vessel_by_imo, get_vessel_by_mmsi
+from risk_monitor.chinaports_client import fetch_ship_info
+from risk_monitor.latest_position_repository import get_latest_position_by_mmsi
+from risk_monitor.position_repository import parse_coordinate, parse_timestamp, to_numeric
+from risk_monitor.vessel_query_repository import get_vessel_by_imo, get_vessel_by_mmsi
 
 
 def _clean_value(value):

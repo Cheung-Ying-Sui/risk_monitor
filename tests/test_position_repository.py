@@ -1,4 +1,4 @@
-from position_repository import upsert_position
+from risk_monitor.position_repository import upsert_position
 
 
 test_position = {
