@@ -1,0 +1,25 @@
+{
+  "sources": [
+    {
+      "crs": "EPSG:4326",
+      "dataset_name": "Ships Routeing Measures",
+      "dataset_type": "official_routeing_measure",
+      "downloaded_at": "2026-08-14T09:18:35.913103+00:00",
+      "geographic_coverage": "UK EEZ; processed subset: English Channel and Western Approaches",
+      "licence": "Open Government Licence v3.0",
+      "official": true,
+      "original_file": [
+        "raw/ukho_routeing_measures_points.geojson",
+        "raw/ukho_routeing_measures_lines.geojson",
+        "raw/ukho_routeing_measures_areas.geojson"
+      ],
+      "processed_feature_count": 96,
+      "processed_file": "processed/english_channel_routeing_prior.geojson",
+      "processing_method": "Filter raw UKHO IMO Routeing Measures Points/Lines/Areas to the POC bbox, normalize feature properties, validate WGS84 GeoJSON geometry, and keep areas/lines/points separate. Polygon boundaries are not converted to route centerlines.",
+      "publisher": "UK Hydrographic Office",
+      "source_id": "ukho_routeing_measures",
+      "source_url": "https://datahub.admiralty.co.uk/server/rest/services/Hosted/Ships_Routeing_Measures/FeatureServer",
+      "source_version": "ArcGIS item modified 2025-08-13; annual update cadence"
+    }
+  ]
+}

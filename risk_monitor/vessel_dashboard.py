@@ -1,8 +1,14 @@
 import time
+import sys
+from pathlib import Path
 
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from risk_monitor.collection_log_repository import get_latest_collection_run
 from risk_monitor.eta_repository import get_vessel_eta_estimate
@@ -11,6 +17,20 @@ from risk_monitor.position_repository import upsert_position
 from risk_monitor.risk_repository import (
     get_active_risk_zones_geojson,
     get_vessel_current_risk,
+)
+from risk_monitor.route_candidate_comparison_repository import (
+    compare_route_candidates,
+)
+from risk_monitor.route_evaluation_repository import (
+    evaluate_route_prediction,
+    get_route_prediction_history,
+)
+from risk_monitor.rolling_route_repository import (
+    ROUTE_UPDATE_REASON_MANUAL_REFRESH,
+    get_rolling_route_prediction,
+)
+from risk_monitor.navigation.shipping_lane_provider import (
+    load_official_routeing_reference,
 )
 from risk_monitor.tracking_repository import (
     add_tracking_vessel,
@@ -679,6 +699,33 @@ def _get_eta_result(vessel):
         }
 
 
+def _get_rolling_route_result(vessel):
+    if not vessel or not vessel.get("mmsi"):
+        return None
+
+    mmsi = str(vessel.get("mmsi"))
+    manual_refresh_key = f"rolling_route_manual_refresh_{mmsi}"
+    update_reason = None
+    if st.session_state.get(manual_refresh_key):
+        update_reason = ROUTE_UPDATE_REASON_MANUAL_REFRESH
+        st.session_state[manual_refresh_key] = False
+
+    try:
+        result = get_rolling_route_prediction(
+            mmsi,
+            update_reason=update_reason,
+        )
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "warnings": [
+                f"Rolling route unavailable: {exc}",
+            ],
+        }
+
+    return result
+
+
 def render_current_position(vessel, eta_result=None):
     st.subheader("C. Current Position")
 
@@ -739,6 +786,24 @@ def _user_friendly_eta_warnings(warnings):
         if message not in messages:
             messages.append(message)
     return messages
+
+
+def _route_status_label(status):
+    if status == "on_route":
+        return "ON EXPECTED ROUTE"
+    if status == "deviating":
+        return "ROUTE DEVIATION DETECTED"
+    if status == "awaiting_new_ais_position":
+        return "AWAITING NEW AIS POSITION"
+    if status == "awaiting_data":
+        return "AWAITING NEW AIS DATA"
+    if status == "insufficient_data":
+        return "INSUFFICIENT AIS DATA"
+    if status == "following_prediction":
+        return "FOLLOWING PREDICTION"
+    if status == "superseded":
+        return "SUPERSEDED"
+    return "UNAVAILABLE"
 
 
 def render_eta_estimate(vessel, eta_result=None):
@@ -862,6 +927,779 @@ def render_eta_estimate(vessel, eta_result=None):
     )
 
 
+def render_route_monitoring_status(vessel, rolling_route_result=None):
+    st.subheader("E. Route Monitoring Status")
+
+    if not vessel or not vessel.get("mmsi"):
+        st.info("Search a vessel with MMSI to view route monitoring.")
+        return
+
+    mmsi = str(vessel.get("mmsi"))
+    manual_refresh_key = f"rolling_route_manual_refresh_{mmsi}"
+    if st.button("Manual Route Refresh"):
+        st.session_state[manual_refresh_key] = True
+        st.rerun()
+
+    if not rolling_route_result or rolling_route_result.get("status") != "estimated":
+        warnings = (rolling_route_result or {}).get("warnings") or []
+        reason = ", ".join(warnings) if warnings else "unavailable"
+        st.info(f"Route monitoring unavailable: {reason}")
+        return
+
+    active_route = rolling_route_result.get("active_route") or {}
+    deviation_result = rolling_route_result.get("deviation_result")
+    if not deviation_result:
+        deviation_result = {
+            "status": "on_route",
+            "distance_to_route_nm": 0,
+            "expected_route_bearing_deg": None,
+            "current_cog_deg": vessel.get("cog"),
+            "course_difference_deg": None,
+            "recalculation_recommended": False,
+            "consecutive_deviation_points": 0,
+            "required_consecutive_deviation_points": 3,
+        }
+
+    status = deviation_result.get("status")
+    if status == "deviating":
+        st.warning(_route_status_label(status))
+    elif status == "on_route":
+        st.success(_route_status_label(status))
+    else:
+        st.info(_route_status_label(status))
+
+    col_version, col_created, col_origin = st.columns(3)
+    col_since, col_new_points, col_reason = st.columns(3)
+    col_distance, col_course, col_expected = st.columns(3)
+    col_recalc, col_current, col_status = st.columns(3)
+    col_version.metric(
+        "Route Version",
+        active_route.get("route_version") or "-",
+    )
+    col_created.metric(
+        "Route Created At",
+        active_route.get("route_created_at") or "-",
+    )
+    col_origin.metric(
+        "Origin Position",
+        active_route.get("origin_position_id") or "-",
+    )
+    col_since.metric(
+        "Monitoring Since",
+        rolling_route_result.get("monitoring_since") or "-",
+    )
+    col_new_points.metric(
+        "New AIS Observations",
+        rolling_route_result.get("new_ais_points_since_prediction", 0),
+    )
+    col_reason.metric(
+        "Route Update Reason",
+        active_route.get("route_update_reason") or "-",
+    )
+    col_distance.metric(
+        "Distance to Predicted Route",
+        _format_number(
+            deviation_result.get("distance_to_route_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_course.metric(
+        "Course Difference",
+        _format_number(
+            deviation_result.get("course_difference_deg"),
+            suffix=" deg",
+        ),
+    )
+    col_expected.metric(
+        "Expected Route Bearing",
+        _format_number(
+            deviation_result.get("expected_route_bearing_deg"),
+            suffix=" deg",
+        ),
+    )
+    col_recalc.metric(
+        "Reroute Recommended",
+        "YES" if deviation_result.get("recalculation_recommended") else "NO",
+    )
+    col_current.metric(
+        "Current COG",
+        _format_number(
+            deviation_result.get("current_cog_deg"),
+            suffix=" deg",
+        ),
+    )
+    col_status.metric(
+        "Route Status",
+        _route_status_label(status),
+    )
+
+    st.caption(
+        "Consecutive deviation points: "
+        f"{deviation_result.get('consecutive_deviation_points', 0)} / "
+        f"{deviation_result.get('required_consecutive_deviation_points', 3)}"
+    )
+    reasons = deviation_result.get("reasons") or []
+    if reasons:
+        st.caption(f"Route monitoring reasons: {', '.join(reasons)}")
+
+
+def _route_prediction_destination_layer(route_geojson):
+    coordinates = (route_geojson or {}).get("coordinates") or []
+    if not coordinates:
+        return []
+
+    longitude, latitude = coordinates[-1][:2]
+    return [
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=pd.DataFrame(
+                [
+                    {
+                        "lat": latitude,
+                        "lon": longitude,
+                        "layer_name": "Destination",
+                    }
+                ]
+            ),
+            get_position="[lon, lat]",
+            get_radius=260,
+            get_fill_color=[
+                22,
+                163,
+                74,
+                230,
+            ],
+            pickable=True,
+        )
+    ]
+
+
+def _route_prediction_playback_chart(evaluation_result):
+    predicted_route = evaluation_result.get("predicted_route")
+    coordinates = (predicted_route or {}).get("coordinates") or []
+    if len(coordinates) < 2:
+        st.info("No valid predicted route geometry available.")
+        return
+
+    actual_track = evaluation_result.get("actual_track") or []
+    actual_data = _valid_position_dataframe(actual_track)
+    first_lon, first_lat = coordinates[0][:2]
+    layers = [
+        *_risk_zone_layers(),
+        pdk.Layer(
+            "PathLayer",
+            data=[
+                {
+                    "path": coordinates,
+                    "layer_name": "Predicted Route",
+                }
+            ],
+            get_path="path",
+            get_color=[
+                245,
+                158,
+                11,
+                220,
+            ],
+            width_min_pixels=4,
+            pickable=True,
+        ),
+        *_route_prediction_destination_layer(predicted_route),
+    ]
+
+    if not actual_data.empty:
+        actual_path = actual_data[
+            [
+                "lon",
+                "lat",
+            ]
+        ].values.tolist()
+        last_actual = actual_data.iloc[-1]
+        layers.extend(
+            [
+                pdk.Layer(
+                    "PathLayer",
+                    data=[
+                        {
+                            "path": actual_path,
+                            "layer_name": "Actual AIS Track",
+                        }
+                    ],
+                    get_path="path",
+                    get_color=[
+                        14,
+                        165,
+                        233,
+                        230,
+                    ],
+                    width_min_pixels=4,
+                    pickable=True,
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=actual_data,
+                    get_position="[lon, lat]",
+                    get_radius=80,
+                    get_fill_color=[
+                        14,
+                        165,
+                        233,
+                        130,
+                    ],
+                    pickable=True,
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=pd.DataFrame([last_actual]),
+                    get_position="[lon, lat]",
+                    get_radius=190,
+                    get_fill_color=[
+                        220,
+                        60,
+                        40,
+                        230,
+                    ],
+                    pickable=True,
+                ),
+            ]
+        )
+
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(
+                latitude=float(first_lat),
+                longitude=float(first_lon),
+                zoom=4,
+                pitch=0,
+            ),
+            layers=layers,
+            tooltip={
+                "text": (
+                    "Layer: {layer_name}\n"
+                    "MMSI: {mmsi}\n"
+                    "Observed: {observed_at}\n"
+                    "SOG: {sog}\n"
+                    "COG: {cog}"
+                )
+            },
+        )
+    )
+    st.caption(
+        "Legend: Predicted Route = amber line | Actual Track = blue line | "
+        "Destination = green marker | JWLA = red polygon"
+    )
+
+
+def render_route_prediction_history(vessel):
+    st.subheader("F. Route Prediction History")
+
+    if not vessel or not vessel.get("mmsi"):
+        st.info("Search a vessel with MMSI to view prediction history.")
+        return
+
+    mmsi = str(vessel.get("mmsi"))
+    try:
+        history = get_route_prediction_history(mmsi)
+    except Exception as exc:
+        st.error(f"Route prediction history query failed: {exc}")
+        return
+
+    if not history:
+        st.info("No route prediction history found.")
+        return
+
+    history_dataframe = _to_dataframe(history)
+    visible_columns = [
+        "route_version",
+        "route_created_at",
+        "superseded_at",
+        "destination_normalized",
+        "destination_unlocode",
+        "route_update_reason",
+        "status",
+    ]
+    st.dataframe(
+        history_dataframe[
+            [
+                column
+                for column in visible_columns
+                if column in history_dataframe.columns
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    options = [
+        int(route_prediction.get("route_version"))
+        for route_prediction in history
+        if route_prediction.get("route_version") is not None
+    ]
+    if not options:
+        st.info("Route versions are unavailable.")
+        return
+
+    selected_version = st.selectbox(
+        "Prediction Version",
+        options=options,
+        index=len(options) - 1,
+    )
+
+    try:
+        evaluation = evaluate_route_prediction(
+            mmsi,
+            route_version=selected_version,
+        )
+    except Exception as exc:
+        st.error(f"Route prediction evaluation failed: {exc}")
+        return
+
+    route_prediction = evaluation.get("route_prediction") or {}
+    status = evaluation.get("status")
+    if status in {"awaiting_data", "insufficient_data"}:
+        st.info(_route_status_label(status))
+    elif status == "deviating":
+        st.warning(_route_status_label(status))
+    else:
+        st.success(_route_status_label(status))
+
+    col_version, col_count, col_status = st.columns(3)
+    col_mean, col_median, col_max = st.columns(3)
+    col_p90, col_adherence, col_progress = st.columns(3)
+    col_version.metric(
+        "Prediction Version",
+        route_prediction.get("route_version") or "-",
+    )
+    col_count.metric(
+        "Observation Count",
+        evaluation.get("observation_count") or 0,
+    )
+    col_status.metric(
+        "Evaluation Status",
+        _route_status_label(status),
+    )
+    col_mean.metric(
+        "Mean Route Deviation",
+        _format_number(
+            evaluation.get("mean_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_median.metric(
+        "Median Route Deviation",
+        _format_number(
+            evaluation.get("median_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_max.metric(
+        "Maximum Route Deviation",
+        _format_number(
+            evaluation.get("max_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_p90.metric(
+        "P90 Route Deviation",
+        _format_number(
+            evaluation.get("p90_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_adherence.metric(
+        "Route Adherence Ratio",
+        _format_number(
+            evaluation.get("route_adherence_ratio"),
+            decimals=3,
+        ),
+    )
+    col_progress.metric(
+        "Route Progress",
+        _format_number(
+            evaluation.get("route_progress_ratio"),
+            decimals=3,
+        ),
+    )
+
+    _route_prediction_playback_chart(evaluation)
+
+    point_errors = evaluation.get("point_errors") or []
+    if point_errors:
+        st.dataframe(
+            _to_dataframe(point_errors),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+def _route_bbox(route_coordinates):
+    return {
+        "min_lon": min(coordinate[0] for coordinate in route_coordinates),
+        "max_lon": max(coordinate[0] for coordinate in route_coordinates),
+        "min_lat": min(coordinate[1] for coordinate in route_coordinates),
+        "max_lat": max(coordinate[1] for coordinate in route_coordinates),
+    }
+
+
+def _bbox_intersects(left, right):
+    return not (
+        left["max_lat"] < right["min_lat"]
+        or left["min_lat"] > right["max_lat"]
+        or left["max_lon"] < right["min_lon"]
+        or left["min_lon"] > right["max_lon"]
+    )
+
+
+def _official_routeing_layers(route_coordinates):
+    if not route_coordinates:
+        return []
+
+    route_bbox = _route_bbox(route_coordinates)
+    expanded_bbox = {
+        "min_lon": route_bbox["min_lon"] - 1,
+        "max_lon": route_bbox["max_lon"] + 1,
+        "min_lat": route_bbox["min_lat"] - 1,
+        "max_lat": route_bbox["max_lat"] + 1,
+    }
+    reference = load_official_routeing_reference()
+    features = []
+    for feature in reference.get("features") or []:
+        if feature.get("type") not in {
+            "traffic_lane",
+            "recommended_track",
+            "deep_water_route",
+            "precautionary_area",
+        }:
+            continue
+        feature_bbox = feature.get("bbox")
+        if not feature_bbox or not _bbox_intersects(feature_bbox, expanded_bbox):
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "layer_name": "Official Routeing Measure",
+                    "name": feature.get("name"),
+                    "routeing_type": feature.get("type"),
+                    "official": feature.get("official"),
+                },
+                "geometry": feature.get("geometry"),
+            }
+        )
+        if len(features) >= 20:
+            break
+
+    if not features:
+        return []
+
+    return [
+        pdk.Layer(
+            "GeoJsonLayer",
+            data={
+                "type": "FeatureCollection",
+                "features": features,
+            },
+            pickable=True,
+            stroked=True,
+            filled=True,
+            get_fill_color=[
+                34,
+                197,
+                94,
+                55,
+            ],
+            get_line_color=[
+                22,
+                101,
+                52,
+                210,
+            ],
+            get_line_width=2,
+        )
+    ]
+
+
+def _candidate_comparison_chart(comparison_result, show_official_measures=False):
+    current_route = comparison_result.get("current_route") or {}
+    candidate = comparison_result.get("official_ranked_candidate") or {}
+    actual_track = comparison_result.get("actual_track") or []
+    current_coordinates = (current_route.get("route_geojson") or {}).get(
+        "coordinates"
+    ) or []
+    candidate_coordinates = (
+        candidate.get("estimated_route_geojson") or {}
+    ).get("coordinates") or []
+    if len(current_coordinates) < 2:
+        st.info("No valid current route geometry available for comparison.")
+        return
+
+    first_lon, first_lat = current_coordinates[0][:2]
+    layers = [
+        *_risk_zone_layers(),
+        *(
+            _official_routeing_layers(current_coordinates)
+            if show_official_measures
+            else []
+        ),
+        pdk.Layer(
+            "PathLayer",
+            data=[
+                {
+                    "path": current_coordinates,
+                    "layer_name": "Current Predicted Route",
+                }
+            ],
+            get_path="path",
+            get_color=[
+                245,
+                158,
+                11,
+                210,
+            ],
+            width_min_pixels=4,
+            pickable=True,
+        ),
+    ]
+    if len(candidate_coordinates) >= 2:
+        layers.append(
+            pdk.Layer(
+                "PathLayer",
+                data=[
+                    {
+                        "path": candidate_coordinates,
+                        "layer_name": "Official Ranked Candidate",
+                    }
+                ],
+                get_path="path",
+                get_color=[
+                    34,
+                    197,
+                    94,
+                    230,
+                ],
+                width_min_pixels=4,
+                pickable=True,
+            )
+        )
+
+    actual_data = _valid_position_dataframe(actual_track)
+    if not actual_data.empty:
+        actual_path = actual_data[
+            [
+                "lon",
+                "lat",
+            ]
+        ].values.tolist()
+        layers.append(
+            pdk.Layer(
+                "PathLayer",
+                data=[
+                    {
+                        "path": actual_path,
+                        "layer_name": "Actual AIS Track",
+                    }
+                ],
+                get_path="path",
+                get_color=[
+                    14,
+                    165,
+                    233,
+                    230,
+                ],
+                width_min_pixels=4,
+                pickable=True,
+            )
+        )
+
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=pdk.ViewState(
+                latitude=float(first_lat),
+                longitude=float(first_lon),
+                zoom=4,
+                pitch=0,
+            ),
+            layers=layers,
+            tooltip={
+                "text": "Layer: {layer_name}\nMMSI: {mmsi}\nObserved: {observed_at}"
+            },
+        )
+    )
+    st.caption(
+        "Legend: Current Predicted Route = amber | "
+        "Official Ranked Candidate = green | Actual AIS Track = blue | "
+        "JWLA = red polygon"
+    )
+
+
+def render_route_candidate_comparison(vessel):
+    st.subheader("G. Route Candidate Comparison")
+
+    if not vessel or not vessel.get("mmsi"):
+        st.info("Search a vessel with MMSI to compare route candidates.")
+        return
+
+    try:
+        comparison = compare_route_candidates(vessel.get("mmsi"))
+    except Exception as exc:
+        st.error(f"Route candidate comparison failed: {exc}")
+        return
+
+    if comparison.get("status") != "estimated":
+        st.info("Route candidate comparison unavailable.")
+        return
+
+    current_metrics = comparison.get("current_metrics") or {}
+    candidate_metrics = comparison.get("official_candidate_metrics") or {}
+    poc_metrics = comparison.get("poc_candidate_metrics") or {}
+    improvement = comparison.get("official_improvement") or {}
+    poc_improvement = comparison.get("poc_improvement") or {}
+    candidate = comparison.get("official_routeing_candidate") or {}
+    source = comparison.get("official_shipping_lane_reference") or {}
+    routeing_scores = comparison.get("routeing_scores") or {}
+    baseline_score = routeing_scores.get("baseline") or {}
+    poc_score = routeing_scores.get("poc_shipping_lane_prior") or {}
+    official_ranked = comparison.get("official_ranked_candidate") or {}
+    if improvement.get("candidate_performs_better"):
+        st.success("Official candidate performs better")
+    else:
+        st.info("Official candidate does not currently outperform baseline")
+
+    col_source, col_version, col_official = st.columns(3)
+    col_base_score, col_poc_score, col_ranked = st.columns(3)
+    col_lane_overlap, col_rec_prox, col_ranked_method = st.columns(3)
+    col_base_mean, col_poc_mean, col_official_mean = st.columns(3)
+    col_base_max, col_poc_max, col_official_max = st.columns(3)
+    col_poc_improve, col_official_improve, col_adherence = st.columns(3)
+    col_source.metric(
+        "Route Prior Source",
+        source.get("source") or "-",
+    )
+    col_version.metric(
+        "Source Version",
+        source.get("source_version") or "-",
+    )
+    col_official.metric(
+        "Official Reference",
+        "YES" if source.get("official") else "NO",
+    )
+    col_base_score.metric(
+        "Baseline Routeing Score",
+        _format_number(
+            baseline_score.get("routeing_score"),
+            decimals=1,
+        ),
+    )
+    col_poc_score.metric(
+        "POC Routeing Score",
+        _format_number(
+            poc_score.get("routeing_score"),
+            decimals=1,
+        ),
+    )
+    col_ranked.metric(
+        "Official Ranked Candidate",
+        official_ranked.get("candidate_id") or "-",
+    )
+    col_lane_overlap.metric(
+        "Official Traffic Lane Overlap",
+        _format_number(
+            poc_score.get("traffic_lane_overlap_distance_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_rec_prox.metric(
+        "Recommended Track Proximity",
+        _format_number(
+            poc_score.get("recommended_track_proximity_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_ranked_method.metric(
+        "Ranked Candidate Method",
+        official_ranked.get("route_method") or "-",
+    )
+    col_base_mean.metric(
+        "Current Mean Deviation",
+        _format_number(
+            current_metrics.get("mean_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_poc_mean.metric(
+        "POC Mean Deviation",
+        _format_number(
+            poc_metrics.get("mean_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_official_mean.metric(
+        "Official Mean Deviation",
+        _format_number(
+            candidate_metrics.get("mean_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_base_max.metric(
+        "Current Max Deviation",
+        _format_number(
+            current_metrics.get("max_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_poc_max.metric(
+        "POC Max Deviation",
+        _format_number(
+            poc_metrics.get("max_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_official_max.metric(
+        "Official Max Deviation",
+        _format_number(
+            candidate_metrics.get("max_deviation_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_poc_improve.metric(
+        "POC Mean Improvement",
+        _format_number(
+            poc_improvement.get("mean_deviation_improvement_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_official_improve.metric(
+        "Official Mean Improvement",
+        _format_number(
+            improvement.get("mean_deviation_improvement_nm"),
+            suffix=" nm",
+        ),
+    )
+    col_adherence.metric(
+        "Official Adherence Improvement",
+        _format_number(
+            improvement.get("adherence_improvement"),
+            decimals=3,
+        ),
+    )
+    st.caption(
+        "Candidate method: "
+        f"{candidate.get('route_method') or '-'} | "
+        "For insurance risk analysis only. Not for vessel navigation. | "
+        "This comparison does not activate or persist a new route version."
+    )
+    show_official_measures = st.checkbox(
+        "Show Official Routeing Measures",
+        value=False,
+    )
+    _candidate_comparison_chart(
+        comparison,
+        show_official_measures=show_official_measures,
+    )
+
+
 def _observed_time_options(track_points):
     return [
         str(point.get("observed_at"))
@@ -871,7 +1709,7 @@ def _observed_time_options(track_points):
 
 
 def render_historical_track_playback(vessel, eta_result=None):
-    st.subheader("E. Historical Track Playback")
+    st.subheader("H. Historical Track Playback")
 
     if not vessel or not vessel.get("mmsi"):
         st.info("Search a vessel with MMSI to play historical track.")
@@ -998,7 +1836,7 @@ def render_historical_track_playback(vessel, eta_result=None):
 
 
 def render_collection_status():
-    st.subheader("F. Collection Status")
+    st.subheader("I. Collection Status")
 
     try:
         latest_run = get_latest_collection_run()
@@ -1026,10 +1864,18 @@ def main():
     st.title("Vessel Risk Monitor Dashboard")
 
     vessel = render_vessel_search()
-    eta_result = _get_eta_result(vessel)
+    rolling_route_result = _get_rolling_route_result(vessel)
+    eta_result = None
+    if rolling_route_result:
+        eta_result = rolling_route_result.get("eta_result")
+    if eta_result is None:
+        eta_result = _get_eta_result(vessel)
     render_tracking_control(vessel)
     render_current_position(vessel, eta_result=eta_result)
     render_eta_estimate(vessel, eta_result=eta_result)
+    render_route_monitoring_status(vessel, rolling_route_result=rolling_route_result)
+    render_route_prediction_history(vessel)
+    render_route_candidate_comparison(vessel)
     render_historical_track_playback(vessel, eta_result=eta_result)
     render_collection_status()
 

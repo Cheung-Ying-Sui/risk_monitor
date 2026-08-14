@@ -4,7 +4,7 @@ from risk_monitor.supabase_client import supabase
 
 
 TRACK_POINT_FIELDS = (
-    "mmsi,latitude,longitude,sog,cog,heading,destination,nav_status,"
+    "id,mmsi,latitude,longitude,sog,cog,heading,destination,nav_status,"
     "observed_at,received_at,source_id"
 )
 
@@ -116,3 +116,51 @@ def get_latest_track_point(mmsi):
         return None
 
     return result.data[0]
+
+
+def get_track_points_after_prediction(
+    mmsi,
+    origin_position_id=None,
+    route_created_at=None,
+    until_observed_at=None,
+    limit=1000,
+):
+    query = (
+        supabase
+        .schema("tracking")
+        .table("vessel_positions")
+        .select(TRACK_POINT_FIELDS)
+        .eq(
+            "mmsi",
+            _normalize_mmsi(mmsi),
+        )
+    )
+
+    if origin_position_id is not None:
+        query = query.gt(
+            "id",
+            int(origin_position_id),
+        )
+    elif route_created_at is not None:
+        query = query.gt(
+            "observed_at",
+            route_created_at,
+        )
+
+    if until_observed_at is not None:
+        query = query.lte(
+            "observed_at",
+            until_observed_at,
+        )
+
+    result = (
+        query
+        .order(
+            "observed_at",
+            desc=False,
+        )
+        .limit(_normalize_limit(limit))
+        .execute()
+    )
+
+    return result.data or []

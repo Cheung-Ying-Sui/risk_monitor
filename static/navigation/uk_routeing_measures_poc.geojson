@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "name": "English Channel / Western Approaches routing prior POC",
+    "source": "Project-controlled MVP reference",
+    "source_version": "phase_2_7_8_poc_v1",
+    "source_notes": "Routing prior for backtesting only. Not official IMO, UKHO, or EMODnet data and not suitable for navigation."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "uk-westbound-channel-western-approaches-poc",
+      "properties": {
+        "name": "English Channel westbound to Western Approaches POC corridor",
+        "type": "recommended_track",
+        "source": "project_controlled_poc",
+        "source_version": "phase_2_7_8_poc_v1",
+        "bbox": {
+          "min_lat": 48.5,
+          "max_lat": 50.6,
+          "min_lon": -6.2,
+          "max_lon": -1.0
+        },
+        "notes": "Non-navigational routing prior for evaluating whether a Channel westbound corridor improves AIS backtest fit."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-3.00, 49.80],
+          [-4.00, 49.50],
+          [-5.00, 49.10],
+          [-6.00, 48.75]
+        ]
+      }
+    }
+  ]
+}
