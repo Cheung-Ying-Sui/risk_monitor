@@ -2,7 +2,7 @@
 
 ## 实现范围
 
-本模块实现第一阶段后端采集与持久化。未改动现有船舶采集、风险区、前端或 `api/main.py`。数据库仓储保留 `get()` 与 `list_incidents()`，供第二阶段 FastAPI 路由使用；当前不新增 HTTP 服务。
+本模块已实现后端采集、持久化和第二阶段 FastAPI 查询接口。现有 `api/main.py` 已挂载 UKMTO router；未改动船舶采集、风险区或前端。HTTP 接入详见 [FastAPI 查询说明](fastapi.md)。
 
 ```text
 ukmto/
@@ -108,6 +108,8 @@ mkdir -p /path/to/risk_monitor/情报收集模块/logs
 无需进程内缓存、Celery 或本地去重文件。不要因为临时请求失败增加任务频率；为日志配置部署侧轮转。调整轮询环境变量不会自动安装或修改 cron。
 
 ## 第二阶段 API
+
+第二阶段已实现，使用独立只读仓储 `query_repository.py` 查询公开字段、精确总数并在分页前过滤地图坐标；路由和响应模型分别位于 `api.py` 与 `api_schemas.py`。以下是第一阶段仓储保留的内部查询方法；前端应使用 [FastAPI 查询接口](fastapi.md)。
 
 仓储查询可由 FastAPI 调用：`get(external_id)`，以及 `list_incidents(from_time, to_time, incident_type, region, status, limit, offset)`；时间过滤目前针对 `published_at`，含边界，按发布时间降序及 ID 排序。
 

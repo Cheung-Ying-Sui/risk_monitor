@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -12,7 +13,7 @@ try:
 
     load_dotenv()
     load_dotenv(
-        Path(__file__).resolve().parent / "制裁筛查模块" / ".env",
+        Path(__file__).resolve().parents[1] / "制裁筛查模块" / ".env",
         override=False,
     )
 except ImportError:
@@ -148,8 +149,72 @@ def _fetch_ship_info_with_curl(mmsi_id):
     return _parse_json_response(result.stdout)
 
 
-def fetch_ship_info(mmsi_id):
+def _fetch_by_mmsi(mmsi_id):
     try:
         return _fetch_ship_info_with_requests(mmsi_id)
     except ChinaportsClientError:
         return _fetch_ship_info_with_curl(mmsi_id)
+
+
+def fetch_ship_info(mmsi_id=None, *, imo=None, mmsi=None):
+    """Prefer an IMO search; use MMSI directly only when IMO is absent.
+
+    The website's shipInfo endpoint accepts MMSI. IMO must first be resolved
+    through its search endpoint. Positional identifiers remain supported.
+    """
+    identifier = str(mmsi_id or "").strip()
+    imo = str(imo or "").strip()
+    mmsi = str(mmsi or "").strip()
+    if identifier:
+        if len(identifier) == 7 and not imo:
+            imo = identifier
+        elif not mmsi:
+            mmsi = identifier
+    if imo and not re.fullmatch(r"[0-9]{7}", imo):
+        raise ChinaportsClientError("IMO must contain seven digits.")
+    if mmsi and not re.fullmatch(r"[0-9]{9}", mmsi):
+        raise ChinaportsClientError("MMSI must contain nine digits.")
+    if not imo:
+        if not mmsi:
+            raise ChinaportsClientError("IMO or MMSI is required.")
+        data = _fetch_by_mmsi(mmsi)
+        if not isinstance(data, dict) or str(data.get("mmsi") or data.get("MMSI") or "") != mmsi:
+            raise ChinaportsClientError("Chinaports returned a different MMSI.")
+        return data
+
+    try:
+        response = requests.post(
+            "https://ship.chinaports.com/newshipquery/search",
+            headers=_build_headers(),
+            data={"isall": "0", "vession": "0", "cnqp": imo, "queryParam": imo},
+            timeout=(5, 15),
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise ChinaportsClientError("Chinaports IMO search unavailable.") from exc
+    if not isinstance(rows, list):
+        raise ChinaportsClientError("Chinaports IMO search returned invalid data.")
+    candidates = list(dict.fromkeys(
+        str(row[1]) for row in rows
+        if isinstance(row, list) and len(row) >= 4
+        and str(row[2]) == "3" and str(row[3]).strip() == imo
+        and re.fullmatch(r"[0-9]{9}", str(row[1]))
+    ))
+    if mmsi:
+        candidates = [mmsi] if mmsi in candidates else []
+    if not candidates or len(candidates) > 5:
+        raise ChinaportsClientError("Chinaports IMO search has no unambiguous matching identity.")
+    matches = []
+    for candidate in candidates:
+        try:
+            data = _fetch_by_mmsi(candidate)
+        except ChinaportsClientError:
+            continue
+        if (isinstance(data, dict)
+                and str(data.get("imo") or data.get("IMO") or "").strip() == imo
+                and str(data.get("mmsi") or data.get("MMSI") or "").strip() == candidate):
+            matches.append(data)
+    if len(matches) != 1:
+        raise ChinaportsClientError("Chinaports IMO identity could not be uniquely verified.")
+    return matches[0]

@@ -1,7 +1,35 @@
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 
 from risk_monitor.supabase_client import supabase
+from risk_monitor.navigation.prediction_trigger import (
+    refresh_prediction_after_position,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _refresh_navigation_prediction_safely(payload, persisted_rows):
+    if not persisted_rows:
+        return None
+
+    try:
+        return refresh_prediction_after_position(
+            vessel_id=payload.get("vessel_id"),
+            mmsi=payload.get("mmsi"),
+            observed_at=payload.get("observed_at"),
+        )
+    except Exception:
+        logger.exception(
+            "navigation_prediction_trigger_failed_after_ais_persistence "
+            "vessel_id=%s mmsi=%s observed_at=%s",
+            payload.get("vessel_id"),
+            payload.get("mmsi"),
+            payload.get("observed_at"),
+        )
+        return None
 
 
 def clean_val(value):
@@ -98,6 +126,22 @@ def to_numeric(value):
         return None
 
 
+def _require_valid_latitude(value):
+    latitude = to_numeric(value)
+    if latitude is None or latitude < -90 or latitude > 90:
+        raise ValueError("position_data.latitude is invalid.")
+
+    return latitude
+
+
+def _require_valid_longitude(value):
+    longitude = to_numeric(value)
+    if longitude is None or longitude < -180 or longitude > 180:
+        raise ValueError("position_data.longitude is invalid.")
+
+    return longitude
+
+
 def get_vessel_id(mmsi):
     result = (
         supabase
@@ -142,6 +186,66 @@ def get_chinaports_source_id():
     return result.data[0]["id"]
 
 
+def upsert_position_for_vessel(vessel_id, mmsi, position_data, source_code="CHINAPORTS"):
+    if not vessel_id:
+        raise ValueError("vessel_id is required.")
+    if not mmsi:
+        raise ValueError("mmsi is required.")
+    if not position_data:
+        raise ValueError("position_data is required.")
+
+    observed_at = clean_val(position_data.get("observed_at"))
+    if not observed_at:
+        raise ValueError("position_data.observed_at is required.")
+
+    if source_code == "CHINAPORTS":
+        source_id = get_chinaports_source_id()
+    elif source_code == "DATALASTIC":
+        source_result = (
+            supabase.schema("ingest").table("data_sources")
+            .upsert({"source_code": "DATALASTIC", "source_name": "Datalastic AIS API", "source_type": "api"}, on_conflict="source_code")
+            .execute()
+        )
+        if not source_result.data:
+            raise RuntimeError("Datalastic data source registration failed.")
+        source_id = source_result.data[0]["id"]
+    else:
+        raise ValueError("Unsupported AIS source code.")
+
+    payload = {
+        "vessel_id": str(vessel_id),
+        "source_id": source_id,
+        "mmsi": str(mmsi),
+        "latitude": _require_valid_latitude(position_data.get("latitude")),
+        "longitude": _require_valid_longitude(position_data.get("longitude")),
+        "heading": to_numeric(position_data.get("heading")),
+        "cog": to_numeric(position_data.get("cog")),
+        "sog": to_numeric(position_data.get("sog")),
+        "destination": clean_val(position_data.get("destination")),
+        "nav_status": clean_val(
+            position_data.get(
+                "navigation_status",
+                position_data.get("nav_status"),
+            )
+        ),
+        "observed_at": observed_at,
+    }
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("vessel_positions")
+        .upsert(
+            payload,
+            on_conflict="vessel_id,observed_at,source_id",
+        )
+        .execute()
+    )
+
+    _refresh_navigation_prediction_safely(payload, result.data)
+    return result.data
+
+
 def upsert_position(raw_data):
     if not raw_data:
         raise ValueError("raw_data is required.")
@@ -180,4 +284,5 @@ def upsert_position(raw_data):
         .execute()
     )
 
+    _refresh_navigation_prediction_safely(payload, result.data)
     return result.data

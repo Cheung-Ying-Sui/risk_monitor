@@ -203,6 +203,7 @@ def get_vessel_eta_estimate(mmsi):
                 latest_position.get("longitude"),
                 destination_resolution.get("latitude"),
                 destination_resolution.get("longitude"),
+                current_cog=latest_position.get("cog"),
             )
         except Exception as exc:
             route_result = {

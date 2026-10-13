@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from risk_monitor.navigation.destination_normalizer import (
     StaticDestinationLLMResolver,
     clear_destination_cache,
@@ -40,6 +42,34 @@ def test_alias():
     assert result["resolution_status"] == "resolved"
     assert result["unlocode"] == "MAPTM"
     assert result["resolution_method"] == "alias_exact"
+
+
+@pytest.mark.parametrize(
+    ("raw_destination", "expected_unlocode"),
+    [
+        ("MYPKG", "MYPKG"),
+        ("NLRTM AND", "NLRTM"),
+        ("AEFJR", "AEFJR"),
+    ],
+)
+def test_current_production_destination_aliases(
+    raw_destination,
+    expected_unlocode,
+):
+    clear_destination_cache()
+    result = resolve_destination(raw_destination)
+
+    assert result["resolution_status"] == "resolved"
+    assert result["unlocode"] == expected_unlocode
+
+
+@pytest.mark.parametrize("raw_destination", ["CN CXEL CAY", "MACUZE"])
+def test_ambiguous_production_destination_is_not_guessed(raw_destination):
+    clear_destination_cache()
+    result = resolve_destination(raw_destination)
+
+    assert result["resolution_status"] == "unresolved"
+    assert result["unlocode"] is None
 
 
 def test_ais_abbreviation_manual_verified():

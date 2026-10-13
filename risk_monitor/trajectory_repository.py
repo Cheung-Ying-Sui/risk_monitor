@@ -9,6 +9,50 @@ TRACK_POINT_FIELDS = (
 )
 
 
+def get_recorded_vessels(limit=1000):
+    result = (
+        supabase
+        .schema("tracking")
+        .table("vessel_positions")
+        .select("vessel_id,mmsi")
+        .order("observed_at", desc=True)
+        .limit(_normalize_limit(limit))
+        .execute()
+    )
+
+    vessels = []
+    seen_mmsi = set()
+    for point in result.data or []:
+        mmsi = _normalize_mmsi(point.get("mmsi")) if point.get("mmsi") else None
+        if not mmsi or mmsi in seen_mmsi:
+            continue
+        seen_mmsi.add(mmsi)
+        vessels.append({"vessel_id": point.get("vessel_id"), "mmsi": mmsi})
+
+    return vessels
+
+
+def get_recorded_vessel_by_id(vessel_id):
+    if not vessel_id:
+        raise ValueError("vessel_id is required.")
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("vessel_positions")
+        .select("vessel_id,mmsi")
+        .eq("vessel_id", str(vessel_id).strip())
+        .order("observed_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
 def _normalize_limit(limit):
     try:
         normalized_limit = int(limit)

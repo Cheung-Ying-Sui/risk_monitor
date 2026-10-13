@@ -21,7 +21,7 @@ NON_PORT_TERMS = {
 def normalize_destination_text(raw_destination):
     raw_value = "" if raw_destination is None else str(raw_destination).strip()
     normalized = raw_value.upper()
-    normalized = re.sub(r"[^A-Z0-9]+", " ", normalized)
+    normalized = re.sub(r"[^A-Z0-9\u3400-\u9fff]+", " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     compact = normalized.replace(" ", "")
 
@@ -208,6 +208,7 @@ def resolve_destination(raw_destination, llm_resolver=None, use_cache=True):
     key = _cache_key(raw_destination)
     if use_cache and key in _DESTINATION_CACHE:
         cached = deepcopy(_DESTINATION_CACHE[key])
+        cached['raw_destination'] = '' if raw_destination is None else str(raw_destination).strip()
         cached["cache_hit"] = True
         return cached
 

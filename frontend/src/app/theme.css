@@ -1,0 +1,162 @@
+.vessel-info-content {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.vessel-info-content::-webkit-scrollbar {
+  display: none;
+}
+
+.vessel-risk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.risk-three-columns {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.risk-data-strip {
+  min-height: 48px;
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 2px;
+  background: #181d23;
+}
+
+.risk-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.risk-secondary-grid > div {
+  min-width: 0;
+  min-height: 66px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 9px;
+  border-radius: 2px;
+  background: #151a20;
+}
+
+.risk-secondary-grid > div > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+}
+
+.vessel-risk-panel .vessel-status {
+  max-width: 100%;
+  overflow: hidden;
+  border-color: #59646e;
+  background: #59646e;
+  color: #fff;
+  box-shadow: none;
+  text-overflow: ellipsis;
+}
+
+.vessel-risk-panel .vessel-status.positive { border-color: #277746; background: #277746; color: #fff; }
+.vessel-risk-panel .vessel-status.warning { border-color: #9a6a10; background: #9a6a10; color: #fff; }
+.vessel-risk-panel .vessel-status.critical { border-color: #a93636; background: #a93636; color: #fff; }
+.vessel-risk-panel .vessel-status.info { border-color: #176a9d; background: #176a9d; color: #fff; }
+
+html[data-theme="light"] .topbar { background: #fff; }
+html[data-theme="light"] .nav-heading { color: #7d8994; }
+html[data-theme="light"] .nav-item { color: #5f6d79; }
+html[data-theme="light"] .nav-item:hover { background: #e9eef3; color: #273641; }
+html[data-theme="light"] .nav-item.active { background: #dfe8ef; color: #17232d; }
+html[data-theme="light"] .system-status { background: #fff; }
+html[data-theme="light"] .system-status strong { color: #52616d; }
+html[data-theme="light"] .avatar { border-color: #aebbc6; background: #dbe6ee; color: #27506d; }
+html[data-theme="light"] .icon-button { background: #fff; }
+html[data-theme="light"] .map-workspace { background: #dfe8ee; }
+
+html[data-theme="light"] .tracking-mode-controller,
+html[data-theme="light"] .map-legend {
+  border-color: rgba(133,148,161,.8);
+  background: rgba(255,255,255,.94);
+}
+
+html[data-theme="light"] .tracking-controller-title,
+html[data-theme="light"] .tracking-selected-vessel > span,
+html[data-theme="light"] .tracking-layer-status > span { color: #657582; }
+html[data-theme="light"] .tracking-mode-segments { background: #eef2f5; }
+html[data-theme="light"] .tracking-mode-segments button { color: #64727e; }
+html[data-theme="light"] .tracking-mode-segments button:hover { background: #e3e9ee; color: #23333f; }
+html[data-theme="light"] .tracking-mode-segments button.active { background: #248fc3; color: #fff; font-weight: 700; }
+
+html[data-theme="light"] .tracking-selected-vessel > div,
+html[data-theme="light"] .tracking-layer-status > div,
+html[data-theme="light"] .map-legend > span { color: #596a77; }
+html[data-theme="light"] .tracking-live-message strong { color: #455660; }
+html[data-theme="light"] .tracking-live-message small,
+html[data-theme="light"] .tracking-live-issues small { color: #74828d; }
+html[data-theme="light"] .tracking-live-message button { border-color: #bcc7d0; background: #e8edf1; color: #52636f; }
+html[data-theme="light"] .live-vessel-search,
+html[data-theme="light"] .live-vessel-list li,
+html[data-theme="light"] .live-vessel-actions button { background: rgba(255,255,255,.88); }
+html[data-theme="light"] .vessel-database-search,
+html[data-theme="light"] .vessel-search-preview,
+html[data-theme="light"] .live-vessel-context-menu,
+html[data-theme="light"] .live-vessel-stop-confirm { background: #f4f7f9; }
+html[data-theme="light"] .vessel-search-preview-position,
+html[data-theme="light"] .vessel-search-preview-no-position { background: #e7edf1; }
+html[data-theme="light"] .live-vessel-context-menu button:hover { background: #e2e9ee; color: #1f303c; }
+html[data-theme="light"] .vessel-search-preview-marker { background: rgba(255,255,255,.88); }
+html[data-theme="light"] .live-vessel-list li:hover { background: #e9eef2; }
+html[data-theme="light"] .live-vessel-list li.selected { border-color: #4f8db3; background: #dcebf4; }
+html[data-theme="light"] .live-vessel-item-heading strong { color: #21313c; }
+html[data-theme="light"] .live-vessel-item-status strong { color: #455660; }
+
+html[data-theme="light"] .voyage-history-search input,
+html[data-theme="light"] .voyage-history-item,
+html[data-theme="light"] .voyage-history-detail .voyage-history-back,
+html[data-theme="light"] .port-call-sequence { background: #f2f5f7; color: #40515e; }
+html[data-theme="light"] .voyage-history-search select,
+html[data-theme="light"] .voyage-history-search select option {
+  color-scheme: light;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+html[data-theme="light"] .voyage-history-search select:focus { border-color: #248fc3; }
+html[data-theme="light"] .voyage-history-item:hover,
+html[data-theme="light"] .voyage-history-item.selected { background: #e5edf3; }
+html[data-theme="light"] .voyage-detail-route,
+html[data-theme="light"] .port-call-type { background: #e8edf1; }
+
+html[data-theme="light"] .map-vessel-search { border-color: #aebbc5; background: rgba(255,255,255,.96); }
+html[data-theme="light"] .map-vessel-search-result { background: #fff; }
+html[data-theme="light"] .map-vessel-search-result:hover { background: #e9eef2; }
+html[data-theme="light"] .maplibregl-ctrl-group { border-color: #aab6c0; background: rgba(255,255,255,.94) !important; }
+html[data-theme="light"] .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: none; }
+html[data-theme="light"] .map-statusbar { background: rgba(255,255,255,.94); color: #697985; }
+
+html[data-theme="light"] .vessel-info-panel { background: rgba(255,255,255,.98); }
+html[data-theme="light"] .vessel-info-close { background: #eef2f5; }
+html[data-theme="light"] .vessel-info-tabs { background: #f2f5f7; }
+html[data-theme="light"] .vessel-info-tabs button:hover { background: #e8edf1; }
+html[data-theme="light"] .vessel-info-tabs button.active { background: #248fc3; color: #fff; font-weight: 700; }
+
+html[data-theme="light"] .vessel-info-grid > div,
+html[data-theme="light"] .overview-data-strip,
+html[data-theme="light"] .overview-kpis > div,
+html[data-theme="light"] .overview-route-status > div,
+html[data-theme="light"] .risk-data-strip,
+html[data-theme="light"] .risk-secondary-grid > div { background: #edf2f5; }
+
+html[data-theme="light"] .vessel-info-grid strong,
+html[data-theme="light"] .overview-data-strip strong,
+html[data-theme="light"] .overview-kpis strong,
+html[data-theme="light"] .overview-navigation strong { color: #21313c; }
+.insurance-origin-status { padding: 2px 5px; border: 1px solid #a6bfd0; border-radius: 2px; background: #e9f3f8; color: #225a7b !important; font-weight: 700; }
+.insured-vessels-pending { display: grid; gap: 5px; max-height: 150px; overflow-y: auto; padding: 8px; border-top: 1px solid #c2ced8; background: #f4f8fa; font-size: 9px; }
+.insured-vessels-pending > div { display: grid; gap: 2px; padding: 4px 0; border-top: 1px solid #dbe4eb; }
+.insured-vessels-pending small { color: #607382; }

@@ -8,6 +8,13 @@ from risk_monitor.navigation.destination_normalizer import resolve_destination
 from risk_monitor.navigation.eta_engine import estimate_eta, estimate_sailing_speed
 from risk_monitor.navigation.route_engine import estimate_navigable_route
 from risk_monitor.navigation.route_monitor import evaluate_route_deviation
+from risk_monitor.navigation.route_prior import apply_shipping_lane_prior
+from risk_monitor.navigation.routeing_feature_adapter import (
+    adapt_routeing_features_for_prior,
+)
+from risk_monitor.navigation.shipping_lane_provider import (
+    load_official_routeing_reference,
+)
 from risk_monitor.supabase_client import supabase
 from risk_monitor.trajectory_repository import get_track_points_after_prediction
 
@@ -16,6 +23,8 @@ ROUTE_UPDATE_REASON_INITIAL = "initial_route"
 ROUTE_UPDATE_REASON_DESTINATION_CHANGED = "destination_changed"
 ROUTE_UPDATE_REASON_ROUTE_DEVIATION = "route_deviation"
 ROUTE_UPDATE_REASON_MANUAL_REFRESH = "manual_refresh"
+ROUTE_GENERATOR_VERSION = "course_aware_maritime_v2"
+LEGACY_DIRECT_ROUTE_METHODS = {"direct_sea_baseline"}
 
 ROUTE_UPDATE_REASONS = {
     ROUTE_UPDATE_REASON_INITIAL,
@@ -53,7 +62,10 @@ def _to_int(value):
 def _request_id(mmsi, origin_position_id, update_reason, destination_unlocode):
     origin_key = origin_position_id if origin_position_id is not None else "no-origin"
     destination_key = destination_unlocode or "unresolved"
-    return f"{mmsi}:{origin_key}:{update_reason}:{destination_key}"
+    return (
+        f"{mmsi}:{origin_key}:{update_reason}:{destination_key}:"
+        f"{ROUTE_GENERATOR_VERSION}"
+    )
 
 
 def _destination_key(destination_resolution, fallback_raw=None):
@@ -80,6 +92,13 @@ def _destination_changed(active_route, destination_resolution, latest_position):
         fallback_raw=latest_position.get("destination") if latest_position else None,
     )
     return bool(previous_key and current_key and previous_key != current_key)
+
+
+def _route_requires_generator_upgrade(active_route):
+    return bool(
+        active_route
+        and active_route.get("route_method") in LEGACY_DIRECT_ROUTE_METHODS
+    )
 
 
 def _route_result_from_prediction(route_prediction):
@@ -181,6 +200,16 @@ def get_active_route_prediction(mmsi):
 
 
 def create_route_prediction(route_snapshot):
+    if (route_snapshot.get('route_geojson') or {}).get('insurance_voyage'):
+        activation = (supabase.schema('tracking').rpc('activate_insurance_route_prediction',
+                      {'p_snapshot': route_snapshot}).execute()).data
+        if not activation:
+            raise RuntimeError('Insurance route activation returned no data')
+        route = _fetch_route_prediction(activation[0]['route_prediction_id'])
+        if not route:
+            raise RuntimeError('Activated insurance route could not be read')
+        route['activation'] = activation[0]
+        return route
     rpc_result = (
         supabase
         .schema("tracking")
@@ -245,7 +274,35 @@ def _generate_route_snapshot(latest_position, destination_resolution, update_rea
         latest_position.get("longitude"),
         destination_resolution.get("latitude"),
         destination_resolution.get("longitude"),
+        current_cog=latest_position.get("cog"),
     )
+    if route_result.get("status") != "estimated":
+        warnings = ",".join(route_result.get("warnings") or [])
+        raise RuntimeError(f"navigable route unavailable: {warnings}")
+
+    try:
+        routeing_reference = load_official_routeing_reference()
+        routeing_features = adapt_routeing_features_for_prior(
+            routeing_reference.get("features") or []
+        )
+        route_with_prior = apply_shipping_lane_prior(
+            route_result,
+            origin={
+                "lat": latest_position.get("latitude"),
+                "lon": latest_position.get("longitude"),
+            },
+            destination={
+                "lat": destination_resolution.get("latitude"),
+                "lon": destination_resolution.get("longitude"),
+            },
+            lane_features=routeing_features,
+        )
+        if route_with_prior.get("shipping_lane_prior_applied"):
+            route_result = route_with_prior
+    except (OSError, TypeError, ValueError):
+        # The controlled routeing layer is an optional prior. The land-checked
+        # baseline remains a valid prediction when reference loading fails.
+        pass
     origin_position_id = _to_int(latest_position.get("position_id"))
     destination_unlocode = destination_resolution.get("unlocode")
     normalized_mmsi = _normalize_mmsi(latest_position.get("mmsi"))
@@ -350,12 +407,13 @@ def _result(
     }
 
 
-def get_rolling_route_prediction(mmsi, update_reason=None):
+def get_rolling_route_prediction(mmsi, update_reason=None, *, insurance_context=None,
+                                 insurance_destination=None, insurance_position=None):
     normalized_mmsi = _normalize_mmsi(mmsi)
     if update_reason and update_reason not in ROUTE_UPDATE_REASONS:
         raise ValueError("invalid route update reason.")
 
-    latest_position = get_latest_position_by_mmsi(normalized_mmsi)
+    latest_position = insurance_position if insurance_context else get_latest_position_by_mmsi(normalized_mmsi)
     if not latest_position:
         return {
             "status": "unavailable",
@@ -374,7 +432,7 @@ def get_rolling_route_prediction(mmsi, update_reason=None):
             "warnings": ["no_latest_position"],
         }
 
-    destination_resolution = resolve_destination(latest_position.get("destination"))
+    destination_resolution = insurance_destination if insurance_context else resolve_destination(latest_position.get("destination"))
     if destination_resolution.get("resolution_status") != "resolved":
         return {
             "status": "unavailable",
@@ -395,13 +453,21 @@ def get_rolling_route_prediction(mmsi, update_reason=None):
         }
 
     active_route = get_active_route_prediction(normalized_mmsi)
+    def snapshot(reason):
+        result = _generate_route_snapshot(latest_position, destination_resolution, reason)
+        if insurance_context:
+            result['route_geojson'] = {**result['route_geojson'], 'insurance_voyage': insurance_context,
+                                       'insurance_origin_observed_at': latest_position.get('observed_at')}
+            previous = (active_route or {}).get('route_prediction_id') or 'none'
+            result['request_id'] += f":insurance:{insurance_context['key']}:{previous}"
+        return result
+
+    context_changed = bool(insurance_context and active_route and (
+        (active_route.get('route_geojson') or {}).get('insurance_voyage') != insurance_context
+        or str(active_route.get('vessel_id')) != str(latest_position.get('vessel_id'))))
     if not active_route:
         active_route = create_route_prediction(
-            _generate_route_snapshot(
-                latest_position,
-                destination_resolution,
-                update_reason or ROUTE_UPDATE_REASON_INITIAL,
-            )
+            snapshot(update_reason or ROUTE_UPDATE_REASON_INITIAL)
         )
         new_points = _new_points_since_route(normalized_mmsi, active_route)
         deviation_result = _evaluate_persisted_route(active_route, new_points)
@@ -420,19 +486,24 @@ def get_rolling_route_prediction(mmsi, update_reason=None):
         destination_resolution,
         latest_position,
     )
-    if update_reason == ROUTE_UPDATE_REASON_MANUAL_REFRESH or destination_changed:
+    generator_upgrade_required = _route_requires_generator_upgrade(active_route)
+    if (
+        update_reason == ROUTE_UPDATE_REASON_MANUAL_REFRESH
+        or destination_changed
+        or generator_upgrade_required
+        or context_changed
+    ):
         reason = (
             ROUTE_UPDATE_REASON_MANUAL_REFRESH
-            if update_reason == ROUTE_UPDATE_REASON_MANUAL_REFRESH
+            if (
+                update_reason == ROUTE_UPDATE_REASON_MANUAL_REFRESH
+                or generator_upgrade_required
+            )
             else ROUTE_UPDATE_REASON_DESTINATION_CHANGED
         )
         previous_route = active_route
         active_route = create_route_prediction(
-            _generate_route_snapshot(
-                latest_position,
-                destination_resolution,
-                reason,
-            )
+            snapshot(reason)
         )
         new_points = _new_points_since_route(normalized_mmsi, active_route)
         deviation_result = _evaluate_persisted_route(active_route, new_points)
@@ -452,11 +523,7 @@ def get_rolling_route_prediction(mmsi, update_reason=None):
     if deviation_result.get("recalculation_recommended"):
         previous_route = active_route
         active_route = create_route_prediction(
-            _generate_route_snapshot(
-                latest_position,
-                destination_resolution,
-                ROUTE_UPDATE_REASON_ROUTE_DEVIATION,
-            )
+            snapshot(ROUTE_UPDATE_REASON_ROUTE_DEVIATION)
         )
         new_points = _new_points_since_route(normalized_mmsi, active_route)
         post_update_deviation = _evaluate_persisted_route(active_route, new_points)

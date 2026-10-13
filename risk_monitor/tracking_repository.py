@@ -85,6 +85,121 @@ def get_tracking_status(mmsi):
     return result.data[0]
 
 
+def get_tracking_status_by_vessel_id(vessel_id):
+    if not vessel_id:
+        raise ValueError("vessel_id is required.")
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("tracked_vessels")
+        .select(TRACKED_VESSEL_FIELDS)
+        .eq(
+            "vessel_id",
+            str(vessel_id),
+        )
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
+def activate_tracking_by_vessel(
+    vessel,
+    tracking_mode="history_tracking",
+    priority=0,
+):
+    if not vessel:
+        raise ValueError("vessel is required.")
+
+    vessel_id = vessel.get("id")
+    if not vessel_id:
+        raise ValueError("vessel.id is required.")
+
+    mmsi = _normalize_mmsi(vessel.get("mmsi"))
+    existing_tracking = get_tracking_status_by_vessel_id(vessel_id)
+
+    if existing_tracking:
+        if existing_tracking.get("is_active") is True:
+            return existing_tracking
+
+        result = (
+            supabase
+            .schema("tracking")
+            .table("tracked_vessels")
+            .update(
+                {
+                    "is_active": True,
+                }
+            )
+            .eq(
+                "id",
+                existing_tracking["id"],
+            )
+            .execute()
+        )
+
+        if not result.data:
+            raise RuntimeError("Failed to reactivate tracked vessel.")
+
+        return result.data[0]
+
+    payload = {
+        "vessel_id": str(vessel_id),
+        "mmsi": mmsi,
+        "tracking_mode": _normalize_tracking_mode(tracking_mode),
+        "priority": _normalize_priority(priority),
+        "is_active": True,
+    }
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("tracked_vessels")
+        .insert(payload)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to activate tracked vessel.")
+
+    return result.data[0]
+
+
+def deactivate_tracking_by_vessel_id(vessel_id):
+    existing_tracking = get_tracking_status_by_vessel_id(vessel_id)
+    if not existing_tracking:
+        return None
+
+    if existing_tracking.get("is_active") is False:
+        return existing_tracking
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("tracked_vessels")
+        .update(
+            {
+                "is_active": False,
+            }
+        )
+        .eq(
+            "id",
+            existing_tracking["id"],
+        )
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to deactivate tracked vessel.")
+
+    return result.data[0]
+
+
 def add_tracking_vessel(
     mmsi,
     tracking_mode="history_tracking",

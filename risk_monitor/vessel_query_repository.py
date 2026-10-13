@@ -2,7 +2,7 @@ from risk_monitor.supabase_client import supabase
 
 
 VESSEL_FIELDS = (
-    "mmsi,imo,ship_name,callsign,ship_type,flag_state,"
+    "id,mmsi,imo,ship_name,callsign,ship_type,flag_state,"
     "length_m,width_m,gross_tonnage"
 )
 
@@ -62,6 +62,31 @@ def get_vessel_by_imo(imo):
         .eq(
             "imo",
             normalized_imo,
+        )
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
+def get_vessel_by_id(vessel_id):
+    normalized_vessel_id = _normalize_identifier(
+        vessel_id,
+        "vessel_id",
+    )
+
+    result = (
+        supabase
+        .schema("core")
+        .table("vessels")
+        .select(VESSEL_FIELDS)
+        .eq(
+            "id",
+            normalized_vessel_id,
         )
         .limit(1)
         .execute()

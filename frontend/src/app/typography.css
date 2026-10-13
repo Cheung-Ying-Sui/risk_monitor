@@ -1,0 +1,251 @@
+:root {
+  --font-ui: var(--font-ibm-plex-sans);
+  --type-page-title: 20px;
+  --type-panel-title: 14px;
+  --type-section-heading: 10px;
+  --type-body: 13px;
+  --type-table: 12px;
+  --type-metadata: 10px;
+  --type-button: 12px;
+  --type-kpi: 20px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-section: .1em;
+  --tracking-metadata: .075em;
+  --tracking-table: .055em;
+}
+
+html,
+body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-variant-numeric: inherit;
+}
+
+/* Global application shell */
+.brand-copy strong { font-size: 10px; font-weight: var(--weight-semibold); line-height: 12px; letter-spacing: 0; }
+.brand-copy small,
+.nav-heading,
+.system-status strong,
+.eyebrow { font-size: var(--type-section-heading); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-section); }
+.nav-item { font-size: 13px; font-weight: var(--weight-regular); letter-spacing: 0; }
+.nav-item.active { font-weight: var(--weight-medium); }
+.nav-submenu a,
+.system-status small,
+.profile small { font-size: 11px; font-weight: var(--weight-regular); letter-spacing: 0; }
+.profile strong { font-size: 12px; font-weight: var(--weight-medium); letter-spacing: 0; }
+.page-context strong { font-size: var(--type-panel-title); font-weight: var(--weight-semibold); letter-spacing: 0; }
+.utc-clock small { font-size: var(--type-metadata); font-weight: var(--weight-medium); letter-spacing: var(--tracking-metadata); }
+.utc-clock strong { font-size: 12px; font-weight: var(--weight-medium); }
+
+/* Vessel Tracking controls and map metadata */
+.tracking-controller-title,
+.tracking-selected-vessel > span,
+.tracking-layer-status > span,
+.voyage-history-heading,
+.voyage-history-year,
+.voyage-detail-section-title,
+.vessel-info-kicker,
+.overview-status-row > span,
+.overview-section-label,
+.overview-labels span,
+.overview-progress span,
+.overview-kpis span,
+.overview-navigation span,
+.overview-route-status > div > span,
+.vessel-info-grid > div > span:first-child {
+  font-size: var(--type-section-heading);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-section);
+  text-transform: uppercase;
+}
+
+.tracking-mode-segments button,
+.vessel-info-tabs button,
+.voyage-history-search input,
+.vessel-info-close {
+  font-size: var(--type-button);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.tracking-selected-vessel > strong,
+.vessel-popup-content strong,
+.voyage-history-route strong,
+.voyage-detail-route strong,
+.voyage-port-call-list li strong,
+.vessel-info-header strong,
+.overview-data-strip strong,
+.overview-navigation strong,
+.vessel-info-grid strong {
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+}
+
+.tracking-selected-vessel > div,
+.tracking-layer-status > div,
+.map-legend > span,
+.vessel-popup-content span,
+.voyage-history-dates,
+.voyage-history-meta,
+.voyage-detail-summary span,
+.map-statusbar {
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+}
+
+.tracking-layer-status small,
+.voyage-history-dates small,
+.voyage-detail-summary small,
+.voyage-port-call-list li > div small,
+.overview-position-strip small {
+  font-size: var(--type-metadata);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-metadata);
+}
+
+.voyage-history-back { font-size: 11px; font-weight: var(--weight-semibold); letter-spacing: .08em; }
+.voyage-history-back-arrow { font-size: 16px; }
+.port-call-sequence { font-size: 10px; }
+.port-call-type,
+.vessel-status { font-size: 10px; font-weight: var(--weight-semibold); letter-spacing: .06em; }
+.overview-kpis strong { font-size: 19px; font-weight: var(--weight-medium); letter-spacing: 0; }
+.overview-kpis strong small { font-size: 11px; font-weight: var(--weight-regular); }
+.overview-progress strong { font-size: 18px; font-weight: var(--weight-medium); }
+
+/* Insurance operations typography */
+.insurance-context-title span,
+.insurance-panel-header span,
+.insurance-section-label,
+.insurance-filter-group > span,
+.insurance-workbench-heading span,
+.application-detail > header span,
+.application-detail-fields span:not(.insurance-status),
+.insurance-activity-feed header span,
+.insurance-modal header span {
+  font-size: var(--type-section-heading);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-section);
+  text-transform: uppercase;
+}
+
+.insurance-context-title strong,
+.insurance-panel-header strong,
+.insurance-workbench-heading strong,
+.insurance-activity-feed header strong,
+.insurance-modal h2 {
+  font-size: var(--type-panel-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+}
+
+.insurance-context-search input,
+.insurance-context-selectors button,
+.new-application-button,
+.insurance-segmented button,
+.filter-button-grid button,
+.insurance-tabs button,
+.application-detail-actions button,
+.insurance-modal-actions button {
+  font-size: var(--type-button);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.insurance-table { font-size: var(--type-table); font-weight: var(--weight-regular); letter-spacing: 0; }
+.insurance-table th { font-size: 10px; font-weight: var(--weight-semibold); letter-spacing: var(--tracking-table); }
+.insurance-table td strong,
+.portfolio-quick-view strong,
+.application-detail-fields strong,
+.upcoming-list strong { font-size: 12px; font-weight: var(--weight-medium); letter-spacing: 0; }
+.insurance-table td small,
+.insurance-panel-header > small,
+.insurance-workbench-heading small,
+.portfolio-quick-view small,
+.upcoming-list small {
+  font-size: var(--type-metadata);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-metadata);
+}
+
+.insurance-status { font-size: 10px; font-weight: var(--weight-semibold); letter-spacing: .06em; }
+.portfolio-summary span { font-size: var(--type-metadata); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-metadata); }
+.portfolio-summary strong { font-size: var(--type-kpi); font-weight: var(--weight-medium); }
+.portfolio-quick-view b { font-size: 16px; font-weight: var(--weight-medium); }
+.application-detail > header strong { font-size: 12px; font-weight: var(--weight-semibold); letter-spacing: 0; }
+.insurance-activity-feed p,
+.exposure-bars > div > div:first-child,
+.pipeline-bars > div,
+.upcoming-list time,
+.insurance-modal p { font-size: 11px; font-weight: var(--weight-regular); letter-spacing: 0; }
+.exposure-bars strong { font-size: 13px; font-weight: var(--weight-medium); }
+.pipeline-bars strong { font-size: 12px; font-weight: var(--weight-medium); }
+
+/* Route-level insurance CSS loads after the root stylesheet. Keep the shared
+   typography contract authoritative without changing component dimensions. */
+.insurance-page :is(
+  .insurance-context-title span,
+  .insurance-panel-header span,
+  .insurance-section-label,
+  .insurance-filter-group > span,
+  .insurance-workbench-heading span,
+  .application-detail > header span,
+  .application-detail-fields span:not(.insurance-status),
+  .insurance-activity-feed header span,
+  .insurance-modal header span
+) {
+  font-size: var(--type-section-heading);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-section);
+}
+
+.insurance-page :is(
+  .insurance-context-title strong,
+  .insurance-panel-header strong,
+  .insurance-workbench-heading strong,
+  .insurance-activity-feed header strong,
+  .insurance-modal h2
+) {
+  font-size: var(--type-panel-title);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+}
+
+.insurance-page :is(
+  .insurance-context-search input,
+  .insurance-context-selectors button,
+  .new-application-button,
+  .insurance-segmented button,
+  .filter-button-grid button,
+  .insurance-tabs button,
+  .application-detail-actions button,
+  .insurance-modal-actions button
+) {
+  font-size: var(--type-button);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+.insurance-page .insurance-table { font-size: var(--type-table); font-weight: var(--weight-regular); }
+.insurance-page .insurance-table th { font-size: 10px; font-weight: var(--weight-semibold); letter-spacing: var(--tracking-table); }
+.insurance-page :is(.insurance-table td strong, .portfolio-quick-view strong, .application-detail-fields strong, .upcoming-list strong) { font-size: 12px; font-weight: var(--weight-medium); letter-spacing: 0; }
+.insurance-page :is(.insurance-table td small, .insurance-panel-header > small, .insurance-workbench-heading small, .portfolio-quick-view small, .upcoming-list small) { font-size: var(--type-metadata); font-weight: var(--weight-medium); letter-spacing: var(--tracking-metadata); }
+.insurance-page .insurance-status { font-size: 10px; font-weight: var(--weight-semibold); letter-spacing: .06em; }
+.insurance-page .portfolio-summary span { font-size: var(--type-metadata); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-metadata); }
+.insurance-page .portfolio-summary strong { font-size: var(--type-kpi); font-weight: var(--weight-medium); }
+.insurance-page .portfolio-quick-view b { font-size: 16px; font-weight: var(--weight-medium); }
+.insurance-page .application-detail > header strong { font-size: 12px; font-weight: var(--weight-semibold); letter-spacing: 0; }
+.insurance-page :is(.insurance-activity-feed p, .exposure-bars > div > div:first-child, .pipeline-bars > div, .upcoming-list time, .insurance-modal p) { font-size: 11px; font-weight: var(--weight-regular); letter-spacing: 0; }
+.insurance-page .exposure-bars strong { font-size: 13px; font-weight: var(--weight-medium); }
+.insurance-page .pipeline-bars strong { font-size: 12px; font-weight: var(--weight-medium); }

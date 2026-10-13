@@ -40,6 +40,12 @@ https://sccd.royalnavy.mod.uk/api/ukmto/all
 
 将工作流和完整模块提交到默认分支，并配置仓库 Actions Secrets 后启用。详细步骤见 [GitHub Actions 部署说明](docs/github-actions.md)。本地 `.env` 不会自动传到 GitHub。
 
+## FastAPI 查询接口
+
+已接入现有 `api.main:app`，提供 `/api/v1/ukmto/incidents`、`/api/v1/ukmto/incidents/{external_id}` 和 `/api/v1/ukmto/incidents.geojson`。支持时间、类型、区域、状态筛选与分页；无坐标事件保留在列表中。
+
+启动命令、返回格式及前端地图分页示例见 [FastAPI 接入说明](docs/fastapi.md)。API 服务需要持续运行，独立于每小时执行的 GitHub Actions 采集任务。
+
 ## 测试
 
 ```bash

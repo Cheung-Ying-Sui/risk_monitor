@@ -70,6 +70,62 @@ PORT_MASTER = [
         "source_reference": "UN/LOCODE DEHAM; Hamburg reference coordinates",
     },
     {
+        "unlocode": "MYPKG",
+        "port_name": "Port Klang",
+        "country_code": "MY",
+        "country_name": "Malaysia",
+        "latitude": 3.0,
+        "longitude": 101.4,
+        "aliases": [
+            "PORT KLANG",
+            "PELABUHAN KLANG",
+            "MY PKG",
+            "MYPKG",
+            "PKG",
+        ],
+        "source": "UN/LOCODE",
+        "source_reference": "UN/LOCODE MYPKG; 0300N 10124E",
+    },
+    {
+        "unlocode": "NLRTM",
+        "port_name": "Rotterdam",
+        "country_code": "NL",
+        "country_name": "Netherlands",
+        "latitude": 51.9167,
+        "longitude": 4.5,
+        "aliases": [
+            "ROTTERDAM",
+            "NL RTM",
+            "NLRTM",
+            "RTM",
+            "NLRTM AND",
+            "NLRTMAND",
+        ],
+        "source": "UN/LOCODE + observed AIS alias",
+        "source_reference": (
+            "UN/LOCODE NLRTM; 5155N 00430E; "
+            "NLRTMAND retained as an explicit local AIS alias"
+        ),
+    },
+    {
+        "unlocode": "AEFJR",
+        "port_name": "Al Fujayrah",
+        "country_code": "AE",
+        "country_name": "United Arab Emirates",
+        "latitude": 25.1167,
+        "longitude": 56.3333,
+        "aliases": [
+            "AL FUJAYRAH",
+            "FUJAYRAH",
+            "FUJAIRAH",
+            "AE FJR",
+            "AEFJR",
+            "FJR",
+        ],
+        "source": "UN/LOCODE",
+        "source_reference": "UN/LOCODE AEFJR; 2507N 05620E",
+    },
+    {
         "unlocode": "FRLEH",
         "port_name": "Le Havre",
         "country_code": "FR",
@@ -93,6 +149,7 @@ PORT_MASTER = [
         "latitude": 34.5967,
         "longitude": 119.2214,
         "aliases": [
+            "连云港", "连云港港",
             "LIANYUNGANG",
             "LIAN YUN GANG",
             "CN LYG",
@@ -128,6 +185,7 @@ PORT_MASTER = [
         "latitude": 36.0671,
         "longitude": 120.3826,
         "aliases": [
+            "青岛", "青岛港",
             "QINGDAO",
             "QING DAO",
             "CN QDG",

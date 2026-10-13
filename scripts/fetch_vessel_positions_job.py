@@ -21,6 +21,11 @@ from risk_monitor.latest_position_repository import get_latest_position_by_mmsi
 from risk_monitor.position_repository import upsert_position
 from risk_monitor.supabase_client import supabase
 from risk_monitor.vessel_repository import upsert_vessel
+from risk_monitor.vessel_query_repository import get_vessel_by_mmsi
+from risk_monitor.insurance_repository import InsuranceRepository
+from risk_monitor.insurance_tracking_service import InsuranceTrackingService
+from risk_monitor.insurance_voyage_lifecycle import VoyageLifecycleService
+from risk_monitor.datalastic_client import is_configured as datalastic_is_configured
 
 
 TRACKING_MODES = [
@@ -117,7 +122,7 @@ def update_collection_run_total(run_id, total_vessels):
     )
 
 
-def process_vessel(record):
+def process_vessel(record, insured_imos=None, insurance_service=None):
     mmsi = str(
         record["mmsi"]
     )
@@ -128,10 +133,21 @@ def process_vessel(record):
         f"priority={record.get('priority')}"
     )
 
+    vessel = get_vessel_by_mmsi(mmsi)
+    imo = str((vessel or {}).get("imo") or record.get("imo") or "").strip()
+    if insured_imos and insurance_service:
+        if imo in insured_imos:
+            try:
+                outcome = insurance_service.sync_imo(imo)
+                if outcome == "tracking":
+                    latest = get_latest_position_by_mmsi(mmsi)
+                    if latest:
+                        return {"mmsi": mmsi, "status": "insurance_ais_refreshed", "observed_at": latest.get("observed_at")}
+            except Exception as exc:
+                print(f"Insured AIS provider unavailable for IMO {imo}: {type(exc).__name__}; trying Chinaports")
+
     try:
-        vessel_data = fetch_ship_info(
-            mmsi
-        )
+        vessel_data = fetch_ship_info(imo=imo or None, mmsi=mmsi)
     except ChinaportsClientError as exc:
         latest_position = get_latest_position_by_mmsi(
             mmsi
@@ -154,6 +170,9 @@ def process_vessel(record):
             f"Chinaports returned no data for mmsi={mmsi}."
         )
 
+    if str(vessel_data.get("mmsi") or "") != mmsi or (imo and str(vessel_data.get("imo") or "") != imo):
+        raise RuntimeError("Chinaports vessel identity mismatch; position was not saved.")
+
     vessel_result = upsert_vessel(
         vessel_data
     )
@@ -171,6 +190,20 @@ def process_vessel(record):
 def main():
     run_id = create_collection_run()
     records = get_active_tracking_records()
+    insurance_service = InsuranceTrackingService() if datalastic_is_configured() else None
+    voyage_lifecycle = VoyageLifecycleService()
+    try:
+        voyage_lifecycle.reconcile_finished()
+    except Exception as exc:
+        print(f"Insurance voyage reconciliation unavailable: {type(exc).__name__}: {exc}")
+    try:
+        insured_imos = {
+            str(vessel.get("imo_number") or "").strip()
+            for vessel in InsuranceRepository().list_insured_vessels()
+        }
+    except Exception as exc:
+        print(f"Insurance vessel lookup unavailable: {type(exc).__name__}; using existing collector")
+        insured_imos = set()
     update_collection_run_total(
         run_id,
         len(records),
@@ -191,8 +224,23 @@ def main():
 
         try:
             result = process_vessel(
-                record
+                record,
+                insured_imos=insured_imos,
+                insurance_service=insurance_service,
             )
+            # Evaluate only an actual stored AIS observation. Lifecycle errors
+            # must not turn a successful position collection into a failed one.
+            try:
+                vessel = get_vessel_by_mmsi(mmsi)
+                imo = str((vessel or {}).get("imo") or "").strip()
+                if imo in insured_imos:
+                    latest = get_latest_position_by_mmsi(mmsi)
+                    if latest:
+                        ended = voyage_lifecycle.process_position(imo, latest)
+                        if ended:
+                            print(f"MVP voyage coverage ended for IMO {imo}: {ended}")
+            except Exception as lifecycle_exc:
+                print(f"Insurance voyage lifecycle unavailable mmsi={mmsi}: {type(lifecycle_exc).__name__}: {lifecycle_exc}")
             success_count += 1
             record_collection_item_success(
                 run_id,

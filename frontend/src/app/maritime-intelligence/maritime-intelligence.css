@@ -1,0 +1,371 @@
+.maritime-intelligence-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr);
+  overflow: hidden;
+  background: #090d12;
+}
+
+.intelligence-feed,
+.intelligence-detail {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0b0f14;
+}
+
+.intelligence-feed {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  bottom: 39px;
+  left: 14px;
+  width: 310px;
+  border: 1px solid rgba(72,83,96,.78);
+  background: rgba(11,15,20,.94);
+  backdrop-filter: blur(5px);
+}
+.intelligence-map { grid-column: 1; }
+.intelligence-detail {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  right: 14px;
+  bottom: 39px;
+  width: 350px;
+  border: 1px solid rgba(72,83,96,.78);
+  background: rgba(11,15,20,.96);
+  backdrop-filter: blur(5px);
+}
+
+.intelligence-feed-header {
+  min-height: 66px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.intelligence-feed-header > span,
+.intelligence-feed-count > span,
+.intelligence-detail-header > span,
+.intelligence-detail-facts span,
+.intelligence-detail-section > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+}
+
+.intelligence-feed-header > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.intelligence-feed-header strong { font-size: 14px; font-weight: 600; }
+.intelligence-feed-header small { color: #64707b; font-size: 9px; font-weight: 600; letter-spacing: .08em; }
+
+.intelligence-time-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-primary);
+  background: #0d1217;
+}
+
+.intelligence-time-filter > label,
+.intelligence-custom-dates span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+.intelligence-time-filter select,
+.intelligence-custom-dates input {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--border-primary);
+  border-radius: 2px;
+  outline: 0;
+  background: #151b21;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.intelligence-time-filter select { padding: 0 8px; cursor: pointer; }
+.intelligence-time-filter select:focus,
+.intelligence-custom-dates input:focus { border-color: #3e7699; }
+.intelligence-custom-dates { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.intelligence-custom-dates label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.intelligence-custom-dates input { min-width: 0; padding: 0 5px; }
+
+.intelligence-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-primary);
+  background: #0d1217;
+}
+
+.intelligence-filters button {
+  min-width: 0;
+  height: 25px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 2px;
+  background: #181e25;
+  color: #707b86;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.intelligence-filters button:hover { background: #222a33; color: var(--text-secondary); }
+.intelligence-filters button.active { background: #248fc3; color: #fff; font-weight: 700; box-shadow: none; }
+.intelligence-filter-symbol { color: var(--category-color, currentColor); font-size: 11px; font-weight: 800; line-height: 1; }
+.intelligence-filters button.active .intelligence-filter-symbol { color: #fff; }
+
+.intelligence-feed-count {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.intelligence-feed-count strong { color: #77828d; font-size: 11px; font-weight: 500; }
+.intelligence-event-list { min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.intelligence-event-list::-webkit-scrollbar { display: none; }
+
+.intelligence-event-item {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.055);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.intelligence-event-item:hover { background: #131920; }
+.intelligence-event-item.selected { background: #17222b; box-shadow: inset 3px 0 0 var(--status-info); }
+.intelligence-event-classification { display: flex; align-items: center; gap: 5px; color: #747f8a; font-size: 9px; font-weight: 600; letter-spacing: .07em; }
+.intelligence-event-classification strong { color: #a7b0b8; font-size: inherit; }
+.severity-indicator { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 1px; background: #78838e; }
+.severity-indicator.medium { background: #c58f22; }
+.severity-indicator.high { background: #d64b4b; }
+.severity-indicator.critical { border: 1px solid #ff9a9a; background: #b92222; }
+.intelligence-event-title { color: #d7dce1; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.intelligence-event-meta { display: flex; flex-direction: column; gap: 3px; color: #87919b; font-size: 10px; }
+.intelligence-event-meta small { color: #606b76; font-size: 9px; font-variant-numeric: tabular-nums; }
+.intelligence-empty-feed { padding: 20px 12px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+
+.intelligence-map { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #0c151c; }
+.intelligence-map-canvas.maplibregl-map { position: absolute; inset: 0 0 25px; width: auto; height: auto; }
+.intelligence-map .maplibregl-ctrl-top-right { top: 4px; right: 4px; }
+.maritime-intelligence-workspace.has-event-detail .intelligence-map .maplibregl-ctrl-top-right { right: 368px; }
+.intelligence-map-state { position: absolute; z-index: 3; top: 50%; left: 50%; display: flex; align-items: center; gap: 8px; transform: translate(-50%,-50%); padding: 9px 12px; border: 1px solid var(--border-secondary); background: rgba(8,11,16,.92); color: #89949e; font-size: 9px; font-weight: 600; letter-spacing: .1em; }
+.intelligence-map-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--status-positive); }
+.intelligence-map-state.error { color: #d88989; }
+.intelligence-map-state.error i { background: var(--status-critical); }
+
+.intelligence-marker {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--category-color, #68737d);
+  border-radius: 0;
+  background: var(--category-background, #fff);
+  color: var(--category-color, #68737d);
+  box-shadow: 0 2px 5px rgba(25,45,58,.2);
+  cursor: pointer;
+}
+
+.intelligence-marker span { display: grid; place-items: center; font-size: 13px; font-weight: 800; line-height: 1; }
+.intelligence-marker.severity-critical { outline: 2px solid rgba(230,82,82,.52); outline-offset: 2px; }
+.intelligence-marker.selected { z-index: 2; outline: 3px solid rgba(36,143,195,.65); outline-offset: 2px; }
+.intelligence-marker:focus-visible, .intelligence-vessel-marker:focus-visible { outline: 3px solid #248fc3; outline-offset: 3px; }
+
+.category-attack { --category-color: #d4453c; --category-background: #fff0ee; }
+.category-suspicious_activity { --category-color: #a66a00; --category-background: #fff6dd; }
+.category-hijack { --category-color: #9f2f52; --category-background: #fcecf2; }
+.category-advisory { --category-color: #1678aa; --category-background: #eaf6fc; }
+.category-military_interaction { --category-color: #7054b3; --category-background: #f1edfb; }
+.category-unknown { --category-color: #66727c; --category-background: #f0f3f5; }
+.category-security { --category-color: #397152; --category-background: #eaf5ee; }
+.category-piracy { --category-color: #343c43; --category-background: #edf0f2; }
+.category-war_conflict { --category-color: #b52e2e; --category-background: #fceaea; }
+.category-port_disruption { --category-color: #9a6712; --category-background: #fff4dc; }
+.category-chokepoint { --category-color: #287782; --category-background: #e9f5f6; }
+.category-weather { --category-color: #256fa5; --category-background: #e8f3fb; }
+.category-marine_casualty { --category-color: #5d6872; --category-background: #edf1f3; }
+
+.intelligence-map-key {
+  position: absolute;
+  z-index: 2;
+  left: 338px;
+  bottom: 37px;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 7px 12px;
+  padding: 9px 10px;
+  border: 1px solid rgba(72,83,96,.75);
+  background: rgba(8,11,16,.92);
+  color: #87919b;
+  font-size: 9px;
+}
+
+.intelligence-map-key span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.intelligence-category-symbol { width: 18px; height: 18px; display: inline-grid; place-items: center; flex: 0 0 18px; border: 1px solid var(--category-color, #68737d); border-radius: 0; background: var(--category-background, #fff); color: var(--category-color, #68737d); font-size: 10px; font-style: normal; font-weight: 800; line-height: 1; }
+.intelligence-detail-category { display: inline-flex; align-items: center; gap: 6px; }
+.intelligence-map-status { position: absolute; z-index: 2; right: 0; bottom: 0; left: 0; height: 25px; display: flex; align-items: center; gap: 16px; padding: 0 9px; border-top: 1px solid var(--border-primary); background: rgba(8,11,16,.94); color: #626d77; font-size: 9px; letter-spacing: .04em; }
+.intelligence-map-status > span:first-child { display: flex; align-items: center; gap: 6px; color: #6fa483; }
+.intelligence-map-status > span:first-child i { width: 6px; height: 6px; border-radius: 50%; background: var(--status-positive); }
+.intelligence-map-spacer { flex: 1; }
+
+.intelligence-detail-header { padding: 13px 14px; border-bottom: 1px solid var(--border-primary); }
+.intelligence-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.intelligence-detail-heading > span { color: var(--text-muted); font-size: 10px; font-weight: 600; letter-spacing: .1em; }
+.intelligence-detail-heading button { width: 27px; height: 27px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border-primary); border-radius: 2px; background: #151b21; color: var(--text-secondary); font-size: 18px; line-height: 1; cursor: pointer; }
+.intelligence-detail-heading button:hover { border-color: var(--border-secondary); background: #202730; color: #fff; }
+.intelligence-detail-header h2 { margin: 8px 0 10px; color: #e3e7eb; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.intelligence-detail-header > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #7f8993; font-size: 10px; font-weight: 600; letter-spacing: .06em; }
+.intelligence-severity { min-height: 21px; display: inline-flex; align-items: center; padding: 0 7px; border-radius: 2px; background: #5d6770; color: #fff; font-size: 9px; font-weight: 600; letter-spacing: .06em; }
+.intelligence-severity.medium { background: #9a6a10; }
+.intelligence-severity.high { background: #a93636; }
+.intelligence-severity.critical { background: #861f1f; }
+.intelligence-detail-scroll { min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
+.intelligence-detail-scroll::-webkit-scrollbar { display: none; }
+.intelligence-detail-facts { display: grid; grid-template-columns: .9fr 1.1fr; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border-primary); }
+.intelligence-detail-facts > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 9px; background: #141a20; }
+.intelligence-detail-facts strong { color: #d5dbe0; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.intelligence-detail-section { padding: 13px 14px; border-bottom: 1px solid var(--border-primary); }
+.intelligence-detail-section p { margin: 8px 0 0; color: #a0a9b1; font-size: 11px; line-height: 1.55; }
+.intelligence-impact-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.intelligence-impact-list li { position: relative; margin-top: 7px; padding-left: 12px; color: #aab2b9; font-size: 11px; line-height: 1.4; }
+.intelligence-impact-list li::before { content: ""; position: absolute; top: 6px; left: 0; width: 4px; height: 4px; background: var(--status-warning); }
+.intelligence-related-assets { margin-top: 8px; background: #141a20; }
+.intelligence-related-assets > div { min-height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border-bottom: 1px solid var(--border-subtle); color: #98a2ab; font-size: 11px; }
+.intelligence-related-assets > div:last-child { border-bottom: 0; }
+.intelligence-related-assets strong { color: #dbe0e4; font-size: 15px; font-weight: 500; }
+.intelligence-placeholder-note { display: block; margin-top: 7px; color: #5f6973; font-size: 9px; }
+.intelligence-source-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.intelligence-source-list span { padding: 4px 6px; border: 1px solid var(--border-secondary); border-radius: 2px; background: #141a20; color: #a3adb5; font-size: 10px; }
+.intelligence-detail-empty { justify-content: center; align-items: center; gap: 8px; padding: 24px; color: var(--text-muted); text-align: center; }
+.intelligence-detail-empty > span { font-size: 10px; font-weight: 600; letter-spacing: .1em; }
+.intelligence-detail-empty p { max-width: 220px; margin: 0; font-size: 12px; line-height: 1.55; }
+
+html[data-theme="light"] .maritime-intelligence-workspace,
+html[data-theme="light"] .intelligence-detail { background: #f7f9fb; }
+html[data-theme="light"] .intelligence-feed { border-color: rgba(133,148,161,.8); background: rgba(255,255,255,.95); }
+html[data-theme="light"] .intelligence-detail { border-color: rgba(133,148,161,.8); background: rgba(255,255,255,.97); }
+html[data-theme="light"] .intelligence-map { background: #e8edf1; }
+html[data-theme="light"] .intelligence-map-state,
+html[data-theme="light"] .intelligence-map-key,
+html[data-theme="light"] .intelligence-map-status { border-color: rgba(133,148,161,.7); background: rgba(255,255,255,.94); color: #61717d; }
+html[data-theme="light"] .intelligence-map-key { color: #53636f; }
+html[data-theme="light"] .intelligence-time-filter,
+html[data-theme="light"] .intelligence-filters { background: #eef2f5; }
+html[data-theme="light"] .intelligence-time-filter select,
+html[data-theme="light"] .intelligence-custom-dates input { border-color: #c6d0d8; background: #fff; color: #344650; }
+html[data-theme="light"] .intelligence-filters button { background: #dde5eb; color: #5d6b76; }
+html[data-theme="light"] .intelligence-filters button:hover { background: #d2dde5; color: #263945; }
+html[data-theme="light"] .intelligence-filters button.active { background: #248fc3; color: #fff; font-weight: 700; }
+html[data-theme="light"] .intelligence-detail-heading button { border-color: #c8d1d8; background: #edf2f5; color: #50616d; }
+html[data-theme="light"] .intelligence-event-item { border-bottom-color: rgba(28,43,56,.09); }
+html[data-theme="light"] .intelligence-event-item:hover { background: #edf2f5; }
+html[data-theme="light"] .intelligence-event-item.selected { background: #dfeaf2; }
+html[data-theme="light"] .intelligence-event-title,
+html[data-theme="light"] .intelligence-detail-header h2 { color: #1e2c36; }
+html[data-theme="light"] .intelligence-event-meta,
+html[data-theme="light"] .intelligence-detail-section p,
+html[data-theme="light"] .intelligence-impact-list li { color: #53626e; }
+html[data-theme="light"] .intelligence-detail-facts > div,
+html[data-theme="light"] .intelligence-related-assets,
+html[data-theme="light"] .intelligence-source-list span { background: #e9eef2; }
+html[data-theme="light"] .intelligence-detail-facts strong,
+html[data-theme="light"] .intelligence-related-assets strong { color: #22323d; }
+@media (max-width: 1280px) {
+  .maritime-intelligence-workspace { grid-template-columns: minmax(400px, 1fr); }
+  .intelligence-feed { width: 290px; }
+  .intelligence-detail { width: 320px; }
+  .maritime-intelligence-workspace.has-event-detail .intelligence-map .maplibregl-ctrl-top-right { right: 338px; }
+  .intelligence-map-key { left: 318px; }
+}
+
+@media (max-width: 1020px) {
+  .maritime-intelligence-workspace { grid-template-columns: minmax(430px, 1fr); overflow-x: auto; }
+  .intelligence-feed { width: 280px; }
+  .intelligence-detail { width: 300px; }
+  .maritime-intelligence-workspace.has-event-detail .intelligence-map .maplibregl-ctrl-top-right { right: 318px; }
+  .intelligence-map-key { left: 308px; }
+}
+
+/* Live UKMTO reports */
+.intelligence-refresh { border: 1px solid var(--border-secondary); border-radius: 3px; padding: 4px 8px; background: transparent; color: var(--text-primary); cursor: pointer; font-size: 11px; }
+.intelligence-refresh:disabled { opacity: .5; cursor: wait; }
+.intelligence-feed-count { gap: 8px; }
+.intelligence-feed-count > strong { margin-left: auto; }
+.intelligence-detail-section .intelligence-report-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.intelligence-detail-facts strong { overflow-wrap: anywhere; }
+.intelligence-source-list a { display: inline-block; padding: 6px 8px; border: 1px solid var(--border-secondary); color: #46b4e6; font-size: 12px; }
+.intelligence-map .maplibregl-ctrl-bottom-right { bottom: 30px; }
+.intelligence-insured-vessels { display: grid; gap: 5px; max-height: 205px; overflow-y: auto; padding: 9px 11px; border-bottom: 1px solid #b9c9d3; background: #eaf3f8; color: #263c49; font-size: 11px; }
+.intelligence-insured-vessel-row { display: grid; gap: 3px; width: 100%; padding: 7px 8px; border: 1px solid #c6d7e2; border-radius: 4px; background: #fff; color: inherit; text-align: left; font: inherit; }
+button.intelligence-insured-vessel-row { cursor: pointer; }
+button.intelligence-insured-vessel-row:hover, .intelligence-insured-vessel-row.selected { border-color: #238bc5; background: #e0f1fb; }
+.intelligence-insured-vessel-name { font-weight: 700; }
+.intelligence-insured-vessels small { color: #647e8c; }
+.intelligence-insured-vessels .intelligence-insured-position { color: #176c99; font-weight: 700; }
+.intelligence-vessel-marker { padding: 0; overflow: visible; }
+.intelligence-vessel-report { display: grid; gap: 8px; padding: 4px 12px 4px 0; max-height: 240px; overflow: auto; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+.intelligence-vessel-report strong { font-size: 13px; }
+.intelligence-vessel-report b { color: #7bc7ed; }
+.intelligence-vessel-report span, .intelligence-vessel-report small { color: #b3c2cf; }
+.intelligence-vessel-popup { max-width: min(300px, calc(100vw - 32px)) !important; }
+html[data-theme="light"] .intelligence-vessel-popup .maplibregl-popup-content { background: #fff !important; color: #263c49; border-color: #b9c9d3; }
+html[data-theme="light"] .intelligence-vessel-report b { color: #176c99; }
+html[data-theme="light"] .intelligence-vessel-report span, html[data-theme="light"] .intelligence-vessel-report small { color: #53636f; }
+.intelligence-vessel-count { position: absolute; bottom: 20px; left: 17px; min-width: 18px; padding: 2px 4px; border: 1px solid #fff; border-radius: 4px; background: #b52e2e; color: #fff; font: 700 10px/1.2 sans-serif; box-shadow: 0 1px 4px #0005; pointer-events: none; }
+.intelligence-insured-vessels small { overflow-wrap: anywhere; }
+.intelligence-insured-vessels .intelligence-risk-label { color: #176c99; font-weight: 700; }
+html:not([data-theme="light"]) .intelligence-insured-vessels { background: #111720; color: #e0e7ee; border-color: #364350; }
+html:not([data-theme="light"]) .intelligence-insured-vessel-row { background: #18212c; border-color: #364350; }
+html:not([data-theme="light"]) .intelligence-insured-vessel-row.selected { background: #163c52; border-color: #248fc3; }
+html:not([data-theme="light"]) .intelligence-insured-vessels small { color: #b3c2cf; }
+html:not([data-theme="light"]) .intelligence-insured-vessels .intelligence-risk-label { color: #7bc7ed; }
+@media (max-width: 600px) {
+  .maritime-intelligence-workspace { display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+  .intelligence-feed { position: relative; inset: auto; width: 100%; max-height: 45vh; flex: 0 0 auto; overflow-y: auto; }
+  .intelligence-feed > * { flex-shrink: 0; }
+  .intelligence-event-list { overflow: visible; }
+  .intelligence-map { min-height: 340px; flex: 1 0 340px; }
+  .intelligence-detail { position: absolute; inset: 8px; width: auto; }
+  .maritime-intelligence-workspace.has-event-detail .intelligence-map .maplibregl-ctrl-top-right { right: 4px; }
+  .intelligence-map-key { left: 8px; bottom: 60px; max-width: calc(100% - 16px); }
+  .intelligence-map-status { gap: 6px; overflow: auto; white-space: nowrap; }
+  .intelligence-map .maplibregl-ctrl-attrib { max-width: calc(100vw - 24px); }
+}

@@ -45,7 +45,13 @@ def _destination(raw="MAPTM", name="Tanger Med"):
     }
 
 
-def _route(version=1, route=ROUTE, destination_raw="MAPTM", origin_position_id=100):
+def _route(
+    version=1,
+    route=ROUTE,
+    destination_raw="MAPTM",
+    origin_position_id=100,
+    route_method="geodesic_sea_route_baseline",
+):
     return {
         "route_prediction_id": f"route-{version}",
         "vessel_id": "vessel-1",
@@ -55,7 +61,7 @@ def _route(version=1, route=ROUTE, destination_raw="MAPTM", origin_position_id=1
         "destination_normalized": "Tanger Med",
         "destination_unlocode": destination_raw,
         "route_version": version,
-        "route_method": "direct_sea_baseline",
+        "route_method": route_method,
         "distance_method": "navigable_route_baseline",
         "route_geojson": route,
         "great_circle_distance_nm": 600,
@@ -84,6 +90,16 @@ def _patch_common(
         get_active_route_prediction=lambda _mmsi: active_route,
         get_track_points_after_prediction=lambda *_args, **_kwargs: new_points or [],
         create_route_prediction=lambda _snapshot: created_route or _route(),
+        estimate_navigable_route=lambda *_args, **_kwargs: {
+            "status": "estimated",
+            "route_method": "course_aware_sea_route_baseline",
+            "distance_method": "course_aware_navigable_route_baseline",
+            "estimated_route_geojson": NEW_ROUTE,
+            "great_circle_distance_nm": 500,
+            "navigable_distance_nm": 510,
+            "route_distance_ratio": 1.02,
+            "warnings": [],
+        },
         _estimate_eta_for_route=lambda *_args, **_kwargs: {
             "status": "estimated",
             "estimated_route_geojson": (
@@ -122,6 +138,26 @@ def test_dashboard_refresh_does_not_regenerate_route():
         result = rolling_route_repository.get_rolling_route_prediction("228397600")
 
     assert result["route_updated"] is False
+
+
+def test_legacy_two_point_route_is_upgraded_once():
+    active = _route(route_method="direct_sea_baseline")
+    upgraded = {
+        **_route(
+            version=2,
+            route=NEW_ROUTE,
+            route_method="course_aware_sea_route_baseline",
+        ),
+        "route_update_reason": "manual_refresh",
+    }
+    with _patch_common(active_route=active, created_route=upgraded):
+        result = rolling_route_repository.get_rolling_route_prediction("228397600")
+
+    assert result["route_updated"] is True
+    assert result["route_update_reason"] == "manual_refresh"
+    assert result["active_route"]["route_method"] == (
+        "course_aware_sea_route_baseline"
+    )
 
 
 def test_no_ais_after_route_creation():

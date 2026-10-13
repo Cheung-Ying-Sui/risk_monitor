@@ -12,6 +12,18 @@ def _clean_value(value):
     return value
 
 
+def _clean_imo(value):
+    value = _clean_value(value)
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if text == "0":
+        return None
+
+    return text
+
+
 def _to_numeric(value):
     value = _clean_value(value)
     if value is None:
@@ -33,11 +45,18 @@ def upsert_vessel(vessel_data):
 
     payload = {
         "mmsi": str(mmsi),
-        "imo": _clean_value(vessel_data.get("imo")),
+        "imo": _clean_imo(vessel_data.get("imo")),
         "ship_name": _clean_value(
-            vessel_data.get("ship_name", vessel_data.get("shipname"))
+            vessel_data.get(
+                "ship_name",
+                vessel_data.get("shipname", vessel_data.get("name")),
+            )
         ),
         "callsign": _clean_value(vessel_data.get("callsign")),
+        "ship_type": _clean_value(vessel_data.get("ship_type")),
+        "flag_state": _clean_value(
+            vessel_data.get("flag_state", vessel_data.get("shipCountry"))
+        ),
         "length_m": _to_numeric(
             vessel_data.get("length_m", vessel_data.get("length"))
         ),

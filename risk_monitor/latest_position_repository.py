@@ -46,6 +46,29 @@ def get_latest_position_by_mmsi(mmsi):
     return result.data[0]
 
 
+def get_latest_position_by_vessel_id(vessel_id):
+    if not vessel_id:
+        raise ValueError("vessel_id is required.")
+
+    result = (
+        supabase
+        .schema("tracking")
+        .table("latest_vessel_positions")
+        .select(LATEST_POSITION_FIELDS)
+        .eq(
+            "vessel_id",
+            str(vessel_id),
+        )
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
 def get_high_risk_latest_positions():
     tracked_result = (
         supabase
