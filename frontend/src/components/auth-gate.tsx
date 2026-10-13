@@ -24,8 +24,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseAuthConfigured);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [registering, setRegistering] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured) {
@@ -49,6 +51,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
       const { error: signInError } = await getSupabaseBrowserClient().auth.signInWithPassword({
         email: email.trim(),
@@ -57,6 +60,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
       if (signInError) throw signInError;
     } catch {
       setError("登录失败，请检查邮箱和密码，或联系管理员确认账号权限。");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function signUp(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      const { data, error: signUpError } = await getSupabaseBrowserClient().auth.signUp({
+        email: email.trim(),
+        password,
+      });
+      if (signUpError) throw signUpError;
+      if (!data.session) {
+        setNotice("注册已完成，但当前认证配置要求额外验证；请联系平台管理员。");
+      } else {
+        setNotice("注册成功，已开通 7 天只读访问权限。");
+      }
+    } catch {
+      setError("注册失败，请检查邮箱和密码，或尝试使用其他邮箱。");
     } finally {
       setSubmitting(false);
     }
@@ -86,10 +112,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (!session?.user) {
     return (
       <main className="auth-screen">
-        <form className="auth-card" onSubmit={signIn}>
+        <form className="auth-card" onSubmit={registering ? signUp : signIn}>
           <span className="auth-eyebrow">SINOCHEM MARITIME RISK PLATFORM</span>
-          <h1>登录海事智能平台</h1>
-          <p>请使用管理员分配的平台账号。未授权账号无法访问业务数据。</p>
+          <h1>{registering ? "注册临时访问账号" : "登录海事智能平台"}</h1>
+          <p>
+            {registering
+              ? "注册后可只读访问真实业务数据 7 天；不可创建或修改业务记录。"
+              : "使用已注册的平台账号登录。"}
+          </p>
           <label htmlFor="auth-email">邮箱</label>
           <input
             autoComplete="username"
@@ -101,18 +131,31 @@ export function AuthGate({ children }: { children: ReactNode }) {
           />
           <label htmlFor="auth-password">密码</label>
           <input
-            autoComplete="current-password"
+            autoComplete={registering ? "new-password" : "current-password"}
             id="auth-password"
+            minLength={8}
             onChange={event => setPassword(event.target.value)}
             required
             type="password"
             value={password}
           />
           {error && <p className="auth-error" role="alert">{error}</p>}
+          {notice && <p className="auth-notice" role="status">{notice}</p>}
           <button disabled={submitting} type="submit">
-            {submitting ? "正在登录…" : "登录"}
+            {submitting ? "请稍候…" : registering ? "注册并开始访问" : "登录"}
           </button>
-          <small>账号由平台管理员创建和授权。</small>
+          <button
+            className="auth-mode-toggle"
+            disabled={submitting}
+            onClick={() => {
+              setRegistering(!registering);
+              setError("");
+              setNotice("");
+            }}
+            type="button"
+          >
+            {registering ? "已有账号？返回登录" : "没有账号？注册 7 天临时账号"}
+          </button>
         </form>
       </main>
     );

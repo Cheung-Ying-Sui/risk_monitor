@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 import httpx
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 
@@ -21,7 +22,7 @@ def _supabase_service_key() -> str | None:
     )
 
 
-async def _resolve_supabase_user_id(access_token: str) -> str:
+async def _resolve_supabase_user(access_token: str) -> tuple[str, str | None]:
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     service_key = _supabase_service_key()
     if not supabase_url or not service_key:
@@ -76,7 +77,8 @@ async def _resolve_supabase_user_id(access_token: str) -> str:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Authentication service returned an invalid user.",
         )
-    return user_id
+    created_at = user.get("created_at") if isinstance(user, dict) else None
+    return user_id, created_at if isinstance(created_at, str) else None
 
 
 async def get_authenticated_user(
@@ -84,6 +86,7 @@ async def get_authenticated_user(
         HTTPAuthorizationCredentials | None,
         Depends(bearer_scheme),
     ],
+    request: Request,
 ) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
@@ -97,17 +100,70 @@ async def get_authenticated_user(
         for user_id in os.getenv("API_AUTHORIZED_USER_IDS", "").split(",")
         if user_id.strip()
     }
-    if not allowed_user_ids:
+    public_signup_access = os.getenv("API_PUBLIC_SIGNUP_ACCESS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not allowed_user_ids and not public_signup_access:
         logger.error("API_AUTHORIZED_USER_IDS is not configured.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="API access is not configured.",
         )
 
-    user_id = await _resolve_supabase_user_id(credentials.credentials)
-    if user_id not in allowed_user_ids:
+    user_id, created_at = await _resolve_supabase_user(credentials.credentials)
+    if user_id in allowed_user_ids:
+        return {"id": user_id, "is_temporary": False}
+
+    if not public_signup_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is not authorized to access the platform.",
         )
-    return {"id": user_id}
+
+    try:
+        access_days = int(os.getenv("API_TEMP_USER_ACCESS_DAYS", "7"))
+        if access_days < 1:
+            raise ValueError
+    except ValueError as exc:
+        logger.error("API_TEMP_USER_ACCESS_DAYS must be a positive integer.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Temporary account access is not configured.",
+        ) from exc
+
+    try:
+        if not created_at:
+            raise ValueError
+        account_created_at = datetime.fromisoformat(
+            created_at.replace("Z", "+00:00"),
+        )
+        if account_created_at.tzinfo is None:
+            raise ValueError
+        account_created_at = account_created_at.astimezone(timezone.utc)
+    except ValueError as exc:
+        logger.error("Supabase authentication response did not contain a valid creation time.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Authentication service returned an invalid user.",
+        ) from exc
+
+    expires_at = account_created_at + timedelta(days=access_days)
+    if datetime.now(timezone.utc) >= expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Temporary account access has expired.",
+        )
+
+    if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Temporary accounts have read-only access.",
+        )
+
+    return {
+        "id": user_id,
+        "is_temporary": True,
+        "expires_at": expires_at.isoformat(),
+    }

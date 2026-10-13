@@ -10,6 +10,9 @@
 .auth-card button:disabled{opacity:.6;cursor:wait}
 .auth-card>small{margin-top:15px;color:var(--text-muted,#74818d);font-size:11px;text-align:center}
 .auth-card .auth-error{margin:-4px 0 14px;color:#b42318;font-size:12px}
+.auth-card .auth-notice{margin:-4px 0 14px;color:#176b47;font-size:12px}
+.auth-mode-toggle{height:auto!important;margin-top:10px!important;padding:8px!important;border:0!important;background:transparent!important;color:#287da9!important;font-size:12px!important;font-weight:600!important}
+.auth-mode-toggle:hover{text-decoration:underline}
 .auth-loading{color:var(--text-secondary,#4e5d69);font-size:13px}
 .auth-sign-out{height:28px;padding:0 9px;border:1px solid var(--border-primary);background:transparent;color:var(--text-secondary);font-size:10px;cursor:pointer}
 .auth-sign-out:hover{border-color:var(--border-secondary);color:var(--text-primary)}
