@@ -6,6 +6,8 @@ import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from "@/lib/supabase";
 import "./auth-gate.css";
 
+const TEMPORARY_ACCESS_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
 interface AuthContextValue {
   user: User | null;
   signOut: () => Promise<void>;
@@ -47,6 +49,37 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const user = session?.user;
+    if (!user || user.user_metadata.temporary_platform_access !== true) return;
+
+    const createdAt = Date.parse(user.created_at);
+    const expiresAt = Number.isFinite(createdAt)
+      ? createdAt + TEMPORARY_ACCESS_DURATION_MS
+      : Date.now();
+
+    async function expireTemporarySession() {
+      const { error: signOutError } = await getSupabaseBrowserClient().auth.signOut();
+      setSession(null);
+      setError(
+        signOutError
+          ? "临时访问期限已结束，自动退出失败；请刷新页面后联系平台管理员。"
+          : "临时访问期限已结束，请联系平台管理员。",
+      );
+    }
+
+    const delay = expiresAt - Date.now();
+    if (delay <= 0) {
+      void expireTemporarySession();
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void expireTemporarySession();
+    }, delay);
+    return () => window.clearTimeout(timeoutId);
+  }, [session]);
+
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -74,6 +107,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       const { data, error: signUpError } = await getSupabaseBrowserClient().auth.signUp({
         email: email.trim(),
         password,
+        options: { data: { temporary_platform_access: true } },
       });
       if (signUpError) throw signUpError;
       if (!data.session) {
