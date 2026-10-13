@@ -16,7 +16,7 @@ services:
       - key: API_TEMP_USER_ACCESS_DAYS
         value: "7"
       - key: CORS_ALLOWED_ORIGINS
-        value: http://localhost:3000,http://127.0.0.1:3000,https://risk-monitor-frontend-alpha.vercel.app,https://maritime-risk-platform.vercel.app
+        value: http://localhost:3000,http://127.0.0.1:3000,https://risk-monitor-frontend-alpha.vercel.app,https://maritime-risk-platform.vercel.app,https://maritime-risk-monitor.rqez.cn
       - key: CORS_ALLOWED_ORIGIN_REGEX
         value: '^https://(?:risk-monitor-frontend(?:-alpha|-([a-z0-9]+-zys18476615082-7273))?|maritime-risk-platform(?:-([a-z0-9]+-zys18476615082-7273))?)\.vercel\.app$'
       - key: SUPABASE_URL
