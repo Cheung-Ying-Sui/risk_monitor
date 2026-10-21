@@ -22,7 +22,7 @@ def _supabase_service_key() -> str | None:
     )
 
 
-async def _resolve_supabase_user(access_token: str) -> tuple[str, str | None]:
+async def _resolve_supabase_user(access_token: str) -> tuple[str, str | None, bool]:
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     service_key = _supabase_service_key()
     if not supabase_url or not service_key:
@@ -78,7 +78,11 @@ async def _resolve_supabase_user(access_token: str) -> tuple[str, str | None]:
             detail="Authentication service returned an invalid user.",
         )
     created_at = user.get("created_at") if isinstance(user, dict) else None
-    return user_id, created_at if isinstance(created_at, str) else None
+    return (
+        user_id,
+        created_at if isinstance(created_at, str) else None,
+        user.get("is_anonymous") is True,
+    )
 
 
 async def get_authenticated_user(
@@ -105,16 +109,24 @@ async def get_authenticated_user(
         "true",
         "yes",
     }
-    if not allowed_user_ids and not public_signup_access:
+    public_guest_write_access = os.getenv("API_PUBLIC_GUEST_WRITE_ACCESS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not allowed_user_ids and not public_signup_access and not public_guest_write_access:
         logger.error("API_AUTHORIZED_USER_IDS is not configured.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="API access is not configured.",
         )
 
-    user_id, created_at = await _resolve_supabase_user(credentials.credentials)
+    user_id, created_at, is_anonymous = await _resolve_supabase_user(credentials.credentials)
     if user_id in allowed_user_ids:
         return {"id": user_id, "is_temporary": False}
+
+    if is_anonymous and public_guest_write_access:
+        return {"id": user_id, "is_temporary": False, "is_anonymous": True}
 
     if not public_signup_access:
         raise HTTPException(
